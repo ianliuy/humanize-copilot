@@ -3,6 +3,7 @@ temp
 
 # Local Claude client settings
 /.claude/settings.json
+/.claude/settings.local.json
 
 # Humanize state directories (runtime-generated, project-local)
 .humanize/
