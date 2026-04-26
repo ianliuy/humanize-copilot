@@ -119,6 +119,56 @@ else
     fail "gen-plan-auto.md does not mention rejecting --plan-file"
 fi
 
+# ----------------------------------------------------------------------
+# 7. gen-plan-auto documents all RLCR pass-through args
+# ----------------------------------------------------------------------
+
+echo "--- gen-plan-auto RLCR pass-through args ---"
+
+for arg in "--max" "--codex-model" "--codex-timeout" "--track-plan-file" "--push-every-round" "--base-branch" "--full-review-round" "--skip-impl" "--claude-answer-codex" "--agent-teams" "--yolo"; do
+    if grep -q -- "$arg" "$REPO_ROOT/commands/gen-plan-auto.md"; then
+        pass "gen-plan-auto documents $arg"
+    else
+        fail "gen-plan-auto missing $arg"
+    fi
+done
+
+# ----------------------------------------------------------------------
+# 8. gen-idea-auto documents --plan-output
+# ----------------------------------------------------------------------
+
+echo "--- gen-idea-auto --plan-output ---"
+
+if grep -q -- "--plan-output" "$REPO_ROOT/commands/gen-idea-auto.md"; then
+    pass "gen-idea-auto documents --plan-output"
+else
+    fail "gen-idea-auto missing --plan-output"
+fi
+
+# ----------------------------------------------------------------------
+# 9. gen-idea-auto creates session dir
+# ----------------------------------------------------------------------
+
+echo "--- gen-idea-auto session dir ---"
+
+if grep -q "idea-plan-auto" "$REPO_ROOT/commands/gen-idea-auto.md"; then
+    pass "gen-idea-auto references session dir"
+else
+    fail "gen-idea-auto missing session dir reference"
+fi
+
+# ----------------------------------------------------------------------
+# 10. gen-plan-auto Recommended-First rule
+# ----------------------------------------------------------------------
+
+echo "--- gen-plan-auto Recommended-First rule ---"
+
+if grep -q "Recommended" "$REPO_ROOT/commands/gen-plan-auto.md"; then
+    pass "gen-plan-auto has Recommended-First rule"
+else
+    fail "gen-plan-auto missing Recommended-First rule"
+fi
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [[ $FAIL -eq 0 ]]

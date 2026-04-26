@@ -65,29 +65,39 @@ Parse `$ARGUMENTS` and partition into three groups:
 
 Store gen-plan mode args + RLCR args as `PLAN_AND_RLCR_ARGS` for the gen-plan-auto step.
 
-## Phase 1: Session Slug and Argument Parsing
+## Phase 1: Session Slug, Argument Parsing, and Directory Setup
 
-Determine the session slug:
-- If `<idea-text-or-path>` is a file path: slug = filename without `.md` extension
-- If inline text: slug = first 40 chars, lowercased, non-alphanumeric replaced with hyphens, trimmed
+1. **Parse and validate arguments**: Reject immediately if `<idea-text-or-path>` is missing or empty (fail before any file/directory creation).
 
-Compute default output paths (used in Phase 2 validation), but do NOT create any directories yet:
-- Default idea output: `.humanize/idea-plan-auto/<slug>/idea.md` (unless `--output` was provided)
-- Default plan output: `.humanize/idea-plan-auto/<slug>/plan.md` (unless `--plan-output` was provided)
+2. **Determine the session slug**:
+   - If `<idea-text-or-path>` is a file path: slug = filename without `.md` extension
+   - If inline text: slug = first 40 chars, lowercased, non-alphanumeric replaced with hyphens, trimmed
 
-## Phase 2: Validate Input and Create Session Directory
+3. **Compute default output paths**:
+   - Default idea output: `.humanize/idea-plan-auto/<slug>/idea.md` (unless `--output` was provided)
+   - Default plan output: `.humanize/idea-plan-auto/<slug>/plan.md` (unless `--plan-output` was provided)
 
-Execute IO validation first:
+4. **Create the session directory** so that `--output` points to an existing parent when passed to the validator:
+   ```bash
+   mkdir -p ".humanize/idea-plan-auto/<slug>/"
+   ```
+
+> **Why create before validation?** The validator checks that the output directory exists (`OUTPUT_DIR_NOT_FOUND`). When `--output` is explicit, the validator does NOT auto-create the parent directory. Creating the empty directory here is safe — no output files are written until validation passes. "Fail before file creation" means "fail before writing output files", not "fail before creating empty directories".
+
+## Phase 2: Validate Input
+
+Execute IO validation (the session directory already exists from Phase 1):
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/scripts/validate-gen-idea-io.sh" <idea-text-or-path> --n <N> --output <idea-output-path>
 ```
 
-**If validation fails**: Stop with clear error. Do not create directories or proceed further.
-
-**If validation succeeds**: Create the session directory and resolve output paths:
+**If validation fails**: Clean up the created session directory and stop with clear error:
 ```bash
-mkdir -p ".humanize/idea-plan-auto/<slug>/"
+rm -rf ".humanize/idea-plan-auto/<slug>/"
 ```
+Do not proceed further.
+
+**If validation succeeds**: Continue with the session directory already in place.
 
 Then execute the full gen-idea workflow as defined in `/humanize:gen-idea` (Phases 0-4: Parse Input, IO Validation, Direction Generation, Parallel Exploration, Synthesis and Write).
 

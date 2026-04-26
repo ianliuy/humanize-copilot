@@ -140,6 +140,7 @@ If reviewers later annotate the generated plan with `CMT:` ... `ENDCMT` blocks, 
 OPTIONS:
   --input   Path to the input draft file (required)
   --output  Path to the output plan file (required)
+  --discussion       Use discussion mode (iterative convergence rounds)
   --direct      Use direct mode (skip convergence rounds)
   --max <N>              Maximum RLCR iterations (default: 42)
   --yolo                 Skip quiz and let Claude answer Codex questions
