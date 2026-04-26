@@ -6,7 +6,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/loop-plan-file-validator.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/loop-plan-file-validator.sh",
+            "windows": "${CLAUDE_PLUGIN_ROOT}/hooks/loop-plan-file-validator.cmd"
           }
         ]
       }
@@ -17,7 +18,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/loop-write-validator.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/loop-write-validator.sh",
+            "windows": "${CLAUDE_PLUGIN_ROOT}/hooks/loop-write-validator.cmd"
           }
         ]
       },
@@ -26,7 +28,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/loop-edit-validator.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/loop-edit-validator.sh",
+            "windows": "${CLAUDE_PLUGIN_ROOT}/hooks/loop-edit-validator.cmd"
           }
         ]
       },
@@ -35,7 +38,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/loop-read-validator.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/loop-read-validator.sh",
+            "windows": "${CLAUDE_PLUGIN_ROOT}/hooks/loop-read-validator.cmd"
           }
         ]
       },
@@ -44,7 +48,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/loop-bash-validator.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/loop-bash-validator.sh",
+            "windows": "${CLAUDE_PLUGIN_ROOT}/hooks/loop-bash-validator.cmd"
           }
         ]
       }
@@ -55,7 +60,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/loop-post-bash-hook.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/loop-post-bash-hook.sh",
+            "windows": "${CLAUDE_PLUGIN_ROOT}/hooks/loop-post-bash-hook.cmd"
           }
         ]
       }
@@ -66,11 +72,13 @@
           {
             "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/hooks/loop-codex-stop-hook.sh",
+            "windows": "${CLAUDE_PLUGIN_ROOT}/hooks/loop-codex-stop-hook.cmd",
             "timeout": 7200
           },
           {
             "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pr-loop-stop-hook.sh",
+            "windows": "${CLAUDE_PLUGIN_ROOT}/hooks/pr-loop-stop-hook.cmd",
             "timeout": 7200
           }
         ]

@@ -75,7 +75,7 @@ fi
 # Prevents Claude from manually running stop hook or stop gate scripts.
 # These scripts should only be invoked by the hooks system, not via Bash.
 
-BLOCKED_HOOK_SCRIPTS="(loop-codex-stop-hook\.sh|pr-loop-stop-hook\.sh|rlcr-stop-gate\.sh)"
+BLOCKED_HOOK_SCRIPTS="(loop-codex-stop-hook\.(sh|cmd|ps1)|pr-loop-stop-hook\.(sh|cmd|ps1)|rlcr-stop-gate\.(sh|cmd|ps1))"
 HOOK_ASSIGNMENT_PREFIX="[[:alpha:]_][[:alnum:]_]*=[^[:space:];&|]+"
 HOOK_COMMAND_PREFIX="command([[:space:]]+(-[^[:space:];&|]+|--))*"
 HOOK_ENV_PREFIX="env([[:space:]]+(-[^[:space:];&|]+|--|${HOOK_ASSIGNMENT_PREFIX}))*"

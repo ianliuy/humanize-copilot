@@ -95,6 +95,21 @@ if [[ -n "$COMMAND_SIGNATURE" ]]; then
         IS_SETUP="true"
     fi
 
+    # Also accept the .cmd Windows-launcher sibling of the setup script: when
+    # Copilot CLI on Windows dispatches the "windows" override, tool_input.command
+    # ends in .cmd while the signal file still records the .sh path the setup
+    # script ran from. Derive the .cmd form by swapping the trailing .sh and
+    # apply the same boundary-aware match. POSIX-form paths only; Windows
+    # backslash-form paths are explicitly out of scope.
+    if [[ "$IS_SETUP" != "true" ]] && [[ "$COMMAND_SIGNATURE" == *.sh ]]; then
+        COMMAND_SIGNATURE_CMD="${COMMAND_SIGNATURE%.sh}.cmd"
+        if [[ "$HOOK_COMMAND" == "\"${COMMAND_SIGNATURE_CMD}\"" ]] || [[ "$HOOK_COMMAND" == "\"${COMMAND_SIGNATURE_CMD}\""[[:space:]]* ]]; then
+            IS_SETUP="true"
+        elif [[ "$HOOK_COMMAND" == "${COMMAND_SIGNATURE_CMD}" ]] || [[ "$HOOK_COMMAND" == "${COMMAND_SIGNATURE_CMD}"[[:space:]]* ]]; then
+            IS_SETUP="true"
+        fi
+    fi
+
     if [[ "$IS_SETUP" != "true" ]]; then
         # This Bash event is not from the setup script - do not consume signal
         exit 0
