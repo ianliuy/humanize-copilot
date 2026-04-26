@@ -1063,7 +1063,7 @@ This RLCR loop was started with \`--skip-impl\` flag.
 
 The loop will automatically run \`codex review\` on your changes when you try to exit.
 If issues are found (marked with [P0-9] priority), you'll need to fix them before the loop ends.
-Do not try to execute anything to trigger the review - just stop and it will run automatically.
+When ready for review, run: \`bash "${CLAUDE_PLUGIN_ROOT}/scripts/rlcr-stop-gate.sh"\`
 
 ## Your Task
 
@@ -1078,7 +1078,13 @@ Do not try to execute anything to trigger the review - just stop and it will run
 Since this is skip-impl mode, there is no implementation plan to follow.
 The goal tracker is not used - focus on fixing code review issues.
 
-When you're ready for review, write a brief summary of your changes and try to exit (do not try to execute anything, just stop).
+When you're ready for review, write a brief summary of your changes, then run the stop gate:
+
+\`\`\`bash
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/rlcr-stop-gate.sh"
+\`\`\`
+
+Handle exit code 0 (done), 10 (blocked, fix issues), or 20 (error).
 
 Write your summary to: @$SUMMARY_PATH
 
@@ -1231,7 +1237,7 @@ Codex Timeout: ${CODEX_TIMEOUT}s
 Loop Directory: $LOOP_DIR
 
 Skip-impl mode is active. The implementation phase is skipped.
-When you try to exit, codex review will run automatically by itself.
+When ready for review, run: bash "${CLAUDE_PLUGIN_ROOT}/scripts/rlcr-stop-gate.sh"
 
 The loop will:
 1. Run codex review on changes between $BASE_BRANCH and $START_BRANCH
@@ -1260,12 +1266,13 @@ Ask User for Codex Questions: $ASK_CODEX_QUESTION
 Agent Teams: $AGENT_TEAMS
 Loop Directory: $LOOP_DIR
 
-The loop is now active. When you try to exit:
-1. Codex will review your work summary
-2. If issues are found, you'll receive feedback and continue
-3. If Codex outputs "COMPLETE", enters Review Phase (code review)
-4. Code review checks for [P0-9] issues; if found, you fix them
-5. When no issues found, enters Finalize Phase and loop ends
+The loop is now active. After each round:
+1. Commit changes and write summary
+2. Run: bash "${CLAUDE_PLUGIN_ROOT}/scripts/rlcr-stop-gate.sh"
+3. If blocked (exit 10), read feedback and continue
+4. If Codex outputs "COMPLETE", enters Review Phase (code review)
+5. Code review checks for [P0-9] issues; if found, you fix them
+6. When no issues found, enters Finalize Phase and loop ends
 
 To cancel: /humanize:cancel-rlcr-loop
 
@@ -1305,6 +1312,19 @@ echo "   - Any remaining items"
 echo "   - ## BitLesson Delta section (Action: none|add|update)"
 echo ""
 echo "Codex will review this summary to determine if work is complete."
+echo ""
+echo "3. Run the RLCR stop gate to trigger Codex review:"
+echo "   bash \"${CLAUDE_PLUGIN_ROOT}/scripts/rlcr-stop-gate.sh\""
+echo ""
+echo "   Handle the exit code:"
+echo "   - Exit 0: loop complete, you may exit"
+echo "   - Exit 10: blocked, read feedback and continue working"
+echo "   - Exit 20: infrastructure error, report to user"
+echo ""
+echo "   NOTE: In some environments (e.g. Copilot CLI), the Stop hook may not"
+echo "   fire automatically. Always call rlcr-stop-gate.sh explicitly to ensure"
+echo "   Codex review runs. If the Stop hook also fires, the gate detects the"
+echo "   duplicate and handles it gracefully."
 echo "==========================================="
 
 # Explicit exit 0 to ensure clean exit code even if final output fails

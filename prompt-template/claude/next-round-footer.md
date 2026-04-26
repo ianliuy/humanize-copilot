@@ -7,3 +7,8 @@ After completing the work, please:
 0. If the `code-simplifier` plugin is installed, use it to review and optimize your code. Invoke via: `/code-simplifier`, `@agent-code-simplifier`, or `@code-simplifier:code-simplifier (agent)`
 1. Commit your changes with a descriptive commit message
 2. Write your work summary into @{{NEXT_SUMMARY_FILE}}
+3. Run the RLCR stop gate to trigger Codex review:
+   ```bash
+   bash "${CLAUDE_PLUGIN_ROOT}/scripts/rlcr-stop-gate.sh"
+   ```
+   Handle exit code: 0 = done, 10 = blocked (read feedback, continue), 20 = error
