@@ -219,5 +219,97 @@ fi
 rm -f "$_test_output" 2>/dev/null || true
 
 echo ""
+echo "=== Auto Command Behavioral Harness Tests ==="
+
+# Create a temp harness directory
+HARNESS_DIR=$(mktemp -d)
+trap "rm -rf '$HARNESS_DIR'" EXIT
+
+# Test: gen-plan-auto documents RLCR arg stripping
+# The command body must mention stripping/separating RLCR args before gen-plan validation
+echo "--- RLCR arg stripping ---"
+if grep -q "RLCR pass-through" "$REPO_ROOT/commands/gen-plan-auto.md" && \
+   grep -q "stripped\|strip\|partition\|separate" "$REPO_ROOT/commands/gen-plan-auto.md"; then
+    pass "gen-plan-auto documents RLCR arg partitioning/stripping"
+else
+    fail "gen-plan-auto missing RLCR arg stripping documentation"
+fi
+
+# Test: gen-plan-auto documents last-value-wins for duplicates
+if grep -qi "last.*win\|duplicate.*last\|Duplicate.*last" "$REPO_ROOT/commands/gen-plan-auto.md"; then
+    pass "gen-plan-auto documents duplicate flag handling (last value wins)"
+else
+    fail "gen-plan-auto missing duplicate flag handling"
+fi
+
+# Test: gen-plan-auto has "No" branch with manual command
+if grep -q 'No.*let me review\|No.*review the plan' "$REPO_ROOT/commands/gen-plan-auto.md" && \
+   grep -q 'start-rlcr-loop' "$REPO_ROOT/commands/gen-plan-auto.md"; then
+    pass "gen-plan-auto has No branch with manual RLCR command"
+else
+    fail "gen-plan-auto missing No branch with manual command"
+fi
+
+# Test: gen-idea-auto creates session dir under .humanize/idea-plan-auto/
+if grep -q 'idea-plan-auto' "$REPO_ROOT/commands/gen-idea-auto.md" && \
+   grep -q 'mkdir' "$REPO_ROOT/commands/gen-idea-auto.md"; then
+    pass "gen-idea-auto creates session directory"
+else
+    fail "gen-idea-auto missing session directory creation"
+fi
+
+# Test: gen-idea-auto safe cleanup (guards against rm -rf)
+if grep -q 'SESSION_DIR_CREATED_BY_US\|created.*by.*this\|created by this invocation' "$REPO_ROOT/commands/gen-idea-auto.md" && \
+   grep -qi 'Do not.*rm -rf\|no.*rm -rf\|never.*rm -rf' "$REPO_ROOT/commands/gen-idea-auto.md"; then
+    pass "gen-idea-auto uses safe cleanup (documents rm -rf prohibition)"
+else
+    fail "gen-idea-auto cleanup may be unsafe"
+fi
+
+# Test: gen-idea-auto rejects --plan-file
+if grep -q '\-\-plan-file.*reject\|Reject.*\-\-plan-file' "$REPO_ROOT/commands/gen-idea-auto.md"; then
+    pass "gen-idea-auto rejects --plan-file"
+else
+    fail "gen-idea-auto missing --plan-file rejection"
+fi
+
+# Test: gen-idea-auto has --plan-output arg
+if grep -q '\-\-plan-output' "$REPO_ROOT/commands/gen-idea-auto.md"; then
+    pass "gen-idea-auto supports --plan-output"
+else
+    fail "gen-idea-auto missing --plan-output"
+fi
+
+# Test: gen-plan-auto AskUserQuestion has Recommended
+if grep -q 'Recommended' "$REPO_ROOT/commands/gen-plan-auto.md" && \
+   grep -q 'Yes.*start.*implementation.*(Recommended)' "$REPO_ROOT/commands/gen-plan-auto.md"; then
+    pass "gen-plan-auto pre-RLCR confirmation has Yes (Recommended)"
+else
+    fail "gen-plan-auto missing Yes (Recommended) in pre-RLCR"
+fi
+
+# Test: validate-gen-idea-io.sh handles --output to non-existent dir
+NONEXIST_DIR="/tmp/humanize-test-nonexist-$(date +%s)"
+exit_code=0
+result=$(bash "$REPO_ROOT/scripts/validate-gen-idea-io.sh" "test idea" --output "$NONEXIST_DIR/idea.md" 2>&1) || exit_code=$?
+if [[ "${exit_code}" -eq 3 ]] || [[ "$result" == *"OUTPUT_DIR_NOT_FOUND"* ]]; then
+    pass "validate-gen-idea-io rejects non-existent output dir (exit 3)"
+else
+    fail "validate-gen-idea-io should reject non-existent output dir (got exit ${exit_code})"
+fi
+
+# Test: validate-gen-idea-io.sh handles existing output file
+EXISTING_FILE="/tmp/humanize-test-existing-$(date +%s).md"
+echo "existing" > "$EXISTING_FILE"
+exit_code=0
+result=$(bash "$REPO_ROOT/scripts/validate-gen-idea-io.sh" "test idea" --output "$EXISTING_FILE" 2>&1) || exit_code=$?
+rm -f "$EXISTING_FILE"
+if [[ "${exit_code}" -eq 4 ]] || [[ "$result" == *"OUTPUT_EXISTS"* ]]; then
+    pass "validate-gen-idea-io rejects existing output file (exit 4)"
+else
+    fail "validate-gen-idea-io should reject existing output file (got exit ${exit_code})"
+fi
+
+echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [[ $FAIL -eq 0 ]]

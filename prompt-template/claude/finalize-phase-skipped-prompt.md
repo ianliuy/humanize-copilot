@@ -41,7 +41,11 @@ These constraints are **non-negotiable**:
 
 1. Complete all tasks (mark them as completed using TaskUpdate with status "completed")
 2. Commit your changes with a descriptive message
-3. Write your finalize summary to: **{{FINALIZE_SUMMARY_FILE}}**
+3. Run the RLCR stop gate to trigger Codex review:
+   ```bash
+   bash "${CLAUDE_PLUGIN_ROOT}/scripts/rlcr-stop-gate.sh"
+   ```
+   Handle exit code: 0 = done, 10 = blocked (read feedback, continue), 20 = error
 
 Your summary should include:
 - What work was done
