@@ -3,7 +3,7 @@
 # Install/upgrade Humanize skills for Kimi and/or Codex.
 #
 # What this does:
-# 1) Sync skills/{humanize,humanize-gen-plan,humanize-rlcr} to target skills dir(s)
+# 1) Sync skills/{humanize,humanize-gen-plan,humanize-gen-plan-auto,humanize-gen-idea-auto,humanize-refine-plan,humanize-rlcr} to target skills dir(s)
 # 2) Copy runtime dependencies into <skills-dir>/humanize/{scripts,hooks,prompt-template}
 # 3) Hydrate SKILL.md command paths with concrete runtime root paths
 #
@@ -33,6 +33,8 @@ DRY_RUN="false"
 SKILL_NAMES=(
     "humanize"
     "humanize-gen-plan"
+    "humanize-gen-plan-auto"
+    "humanize-gen-idea-auto"
     "humanize-refine-plan"
     "humanize-rlcr"
 )

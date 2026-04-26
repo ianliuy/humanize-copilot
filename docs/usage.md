@@ -62,6 +62,8 @@ The quiz is advisory, not a gate. You always have the option to proceed. But tha
 | `/start-rlcr-loop <plan.md>` | Start iterative development with Codex review |
 | `/cancel-rlcr-loop` | Cancel active loop |
 | `/gen-plan --input <draft.md> --output <plan.md>` | Generate structured plan from draft |
+| `/gen-plan-auto --input <draft.md> --output <plan.md>` | Generate plan and auto-start RLCR loop |
+| `/gen-idea-auto "idea"` | Full pipeline: idea → plan → RLCR loop |
 | `/refine-plan --input <annotated-plan.md>` | Refine an annotated plan and generate a QA ledger |
 | `/start-pr-loop --claude\|--codex` | Start PR review loop with bot monitoring |
 | `/cancel-pr-loop` | Cancel active PR loop |
@@ -129,6 +131,41 @@ Workflow:
 
 If reviewers later annotate the generated plan with `CMT:` ... `ENDCMT` blocks, run
 `/humanize:refine-plan --input <plan.md>` before starting or resuming implementation.
+
+### gen-plan-auto
+
+```
+/humanize:gen-plan-auto --input <path/to/draft.md> --output <path/to/plan.md> [OPTIONS]
+
+OPTIONS:
+  --input   Path to the input draft file (required)
+  --output  Path to the output plan file (required)
+  --direct      Use direct mode (skip convergence rounds)
+  --max <N>              Maximum RLCR iterations (default: 42)
+  --yolo                 Skip quiz and let Claude answer Codex questions
+  --skip-quiz            Skip quiz only
+  --claude-answer-codex  Let Claude answer Codex open questions
+  -h, --help             Show help message
+```
+
+Auto variant of `gen-plan` that chains directly into the RLCR implementation loop after
+plan generation. Accepts all `gen-plan` arguments plus RLCR pass-through arguments
+(`--max`, `--yolo`, `--skip-quiz`, `--claude-answer-codex`, etc.).
+
+### gen-idea-auto
+
+```
+/humanize:gen-idea-auto <idea-text-or-file> [OPTIONS]
+
+OPTIONS:
+  --direct      Use direct mode for plan generation
+  --max <N>              Maximum RLCR iterations (default: 42)
+  --yolo                 Skip quiz and let Claude answer Codex questions
+  -h, --help             Show help message
+```
+
+Full pipeline: idea → plan → RLCR loop in one command. Pass a string or file path as
+the idea source. Accepts RLCR pass-through arguments.
 
 ### refine-plan
 

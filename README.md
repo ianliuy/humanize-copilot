@@ -45,17 +45,23 @@ Requires [codex CLI](https://github.com/openai/codex) for review. See the full [
    /humanize:gen-plan --input draft.md --output docs/plan.md
    ```
 
-2. **Refine an annotated plan** before implementation when reviewers add `CMT:` ... `ENDCMT` comments:
+2. **Or go full auto** -- idea → plan → RLCR in one command:
+   ```bash
+   /humanize:gen-idea-auto "Add undo/redo support"
+   /humanize:gen-plan-auto --input draft.md --output docs/plan.md --yolo
+   ```
+
+3. **Refine an annotated plan** before implementation when reviewers add `CMT:` ... `ENDCMT` comments:
    ```bash
    /humanize:refine-plan --input docs/plan.md
    ```
 
-3. **Run the loop**:
+4. **Run the loop**:
    ```bash
    /humanize:start-rlcr-loop docs/plan.md
    ```
 
-4. **Monitor progress**:
+5. **Monitor progress**:
    ```bash
    source <path/to/humanize>/scripts/humanize.sh
    humanize monitor rlcr
