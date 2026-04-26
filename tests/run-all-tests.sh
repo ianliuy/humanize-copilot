@@ -119,6 +119,7 @@ TEST_SUITES=(
     "robustness/test-state-transition-robustness.sh"
     "robustness/test-pr-loop-api-fetch.sh"
     "robustness/test-pr-loop-api-poll.sh"
+    "test-windows-launcher-shims.sh"
 )
 
 # Tests that must be run with zsh (not bash)

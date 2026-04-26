@@ -3,6 +3,7 @@ description: "Refine an annotated implementation plan and generate a QA ledger"
 argument-hint: "--input <path/to/annotated-plan.md> [--output <path/to/refined-plan.md>] [--qa-dir <path/to/qa-dir>] [--alt-language <language-or-code>] [--discussion|--direct]"
 allowed-tools:
   - "Bash(${CLAUDE_PLUGIN_ROOT}/scripts/validate-refine-plan-io.sh:*)"
+  - "Bash(${CLAUDE_PLUGIN_ROOT}/scripts/validate-refine-plan-io.cmd:*)"
   - "Read"
   - "Glob"
   - "Grep"

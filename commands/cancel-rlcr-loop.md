@@ -1,6 +1,6 @@
 ---
 description: "Cancel active RLCR loop"
-allowed-tools: ["Bash(${CLAUDE_PLUGIN_ROOT}/scripts/cancel-rlcr-loop.sh)", "Bash(${CLAUDE_PLUGIN_ROOT}/scripts/cancel-rlcr-loop.sh --force)", "AskUserQuestion"]
+allowed-tools: ["Bash(${CLAUDE_PLUGIN_ROOT}/scripts/cancel-rlcr-loop.sh)", "Bash(${CLAUDE_PLUGIN_ROOT}/scripts/cancel-rlcr-loop.sh --force)", "Bash(${CLAUDE_PLUGIN_ROOT}/scripts/cancel-rlcr-loop.cmd)", "Bash(${CLAUDE_PLUGIN_ROOT}/scripts/cancel-rlcr-loop.cmd --force)", "AskUserQuestion"]
 disable-model-invocation: true
 ---
 

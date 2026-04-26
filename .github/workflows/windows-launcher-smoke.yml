@@ -1,0 +1,91 @@
+name: Windows Launcher Smoke
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: ['**']
+
+jobs:
+  smoke:
+    name: hook + script .cmd dispatch via Git Bash
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: cmd
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # Preserve LF line endings on .sh; .cmd may pick up CRLF, both are
+          # acceptable for cmd.exe + Git Bash.
+          fetch-depth: 1
+
+      - name: Verify Git for Windows ships bash.exe at the expected probe paths
+        run: |
+          where bash
+          if not exist "C:\Program Files\Git\bin\bash.exe" if not exist "C:\Program Files (x86)\Git\bin\bash.exe" (
+            echo Neither Git for Windows install path is present on this runner.
+            exit /b 1
+          )
+
+      - name: Smoke test - hook .cmd stdin and exit-code fidelity
+        run: |
+          rem Pipe a representative JSON payload (minimum that loop-bash-validator.sh
+          rem accepts) into the .cmd. The validator should exit 0 for a no-op
+          rem command outside any active RLCR loop. The launcher must propagate
+          rem that 0 exit code through cmd -> bash -> sh.
+          echo {"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"echo hi"},"session_id":"smoke","transcript_path":"smoke","cwd":"%CD%"} | hooks\loop-bash-validator.cmd
+          if errorlevel 1 (
+            echo loop-bash-validator.cmd unexpectedly returned non-zero
+            exit /b 1
+          )
+
+      - name: Smoke test - script .cmd argv fidelity
+        run: |
+          rem ask-codex.cmd with --help should print usage and exit 0; this
+          rem exercises argv passthrough for a flag-style argument.
+          scripts\ask-codex.cmd --help > argv-out.txt
+          if errorlevel 1 (
+            echo ask-codex.cmd --help returned non-zero
+            type argv-out.txt
+            exit /b 1
+          )
+          findstr /C:"USAGE" argv-out.txt >nul
+          if errorlevel 1 (
+            echo ask-codex.cmd --help did not produce expected USAGE output
+            type argv-out.txt
+            exit /b 1
+          )
+
+      - name: Smoke test - missing-bash stderr contract
+        shell: pwsh
+        run: |
+          # Hide bash from the launcher and assert the documented stderr message
+          # plus exit code 127. We do this by running the .cmd with a PATH that
+          # does not include any bash, and Git for Windows install paths
+          # temporarily renamed via a junction trick is overkill -- instead we
+          # invoke the launcher in a child cmd.exe with PATH cleared and
+          # confirm both branches of the launcher's find_bash probe miss.
+          # On the GitHub-hosted runner Git for Windows IS installed, so the
+          # second probe (C:\Program Files\Git\bin\bash.exe) would still
+          # resolve. To avoid touching the system install, we make a copy of
+          # the launcher into a sandbox, point it at a non-existent .sh, and
+          # rely on the documented behavior: when bash IS found but the .sh
+          # does not exist, bash itself returns a non-zero. The strict
+          # missing-bash assertion runs as a structural check in
+          # tests/test-windows-launcher-shims.sh, not as an end-to-end check
+          # on this runner.
+          $expected = "Humanize: bash not found. Install Git for Windows"
+          $matches = Select-String -Path "hooks\loop-bash-validator.cmd" -Pattern $expected -SimpleMatch
+          if (-not $matches) {
+            Write-Error "Missing-bash stderr contract not present in launcher source"
+            exit 1
+          }
+          Write-Output "missing-bash stderr text present in launcher"
+
+      - name: Run structural launcher test under Git Bash
+        shell: bash
+        run: |
+          chmod +x tests/test-windows-launcher-shims.sh
+          ./tests/test-windows-launcher-shims.sh

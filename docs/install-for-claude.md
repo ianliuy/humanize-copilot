@@ -71,10 +71,29 @@ humanize monitor rlcr   # Monitor RLCR loop
 humanize monitor pr     # Monitor PR loop
 ```
 
+## Windows
+
+Humanize hooks are bash scripts. To run them on Windows, you need a working `bash` interpreter on `PATH` or installed in a known location. The supported runtime is **Git for Windows** (`bash.exe` shipped as part of Git Bash).
+
+The `.cmd` launchers under `hooks/` and `scripts/` probe for bash in this order:
+
+1. The first `bash` returned by `where bash` (so any user-installed Git Bash on `PATH` wins).
+2. `C:\Program Files\Git\bin\bash.exe` (the default 64-bit Git for Windows install path).
+3. `C:\Program Files (x86)\Git\bin\bash.exe` (the default 32-bit fallback).
+
+When none of those resolve, the launcher exits non-zero and prints exactly:
+
+```
+Humanize: bash not found. Install Git for Windows (https://git-scm.com/download/win) or see docs/install-for-claude.md#windows.
+```
+
+Install Git for Windows from [git-scm.com/download/win](https://git-scm.com/download/win) and rerun. MSYS2 and WSL are not currently probed (they require different launch semantics); if you have them, ensure their `bash.exe` is on `PATH` so the `where bash` probe finds it. PowerShell is not used by Humanize launchers in v1.
+
 ## Other Install Guides
 
 - [Install for Codex](install-for-codex.md)
 - [Install for Kimi](install-for-kimi.md)
+- [Install for Copilot](install-for-copilot.md)
 
 ## Next Steps
 
