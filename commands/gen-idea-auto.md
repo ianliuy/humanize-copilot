@@ -65,26 +65,28 @@ Parse `$ARGUMENTS` and partition into three groups:
 
 Store gen-plan mode args + RLCR args as `PLAN_AND_RLCR_ARGS` for the gen-plan-auto step.
 
-## Phase 1: Session Directory Setup
+## Phase 1: Session Slug and Argument Parsing
 
 Determine the session slug:
 - If `<idea-text-or-path>` is a file path: slug = filename without `.md` extension
 - If inline text: slug = first 40 chars, lowercased, non-alphanumeric replaced with hyphens, trimmed
 
-Create the session directory:
-```bash
-mkdir -p ".humanize/idea-plan-auto/<slug>/"
-```
+Compute default output paths (used in Phase 2 validation), but do NOT create any directories yet:
+- Default idea output: `.humanize/idea-plan-auto/<slug>/idea.md` (unless `--output` was provided)
+- Default plan output: `.humanize/idea-plan-auto/<slug>/plan.md` (unless `--plan-output` was provided)
 
-Resolve output paths (unless user overrode them):
-- Idea output: `.humanize/idea-plan-auto/<slug>/idea.md` (unless `--output` was provided)
-- Plan output: `.humanize/idea-plan-auto/<slug>/plan.md` (unless `--plan-output` was provided)
+## Phase 2: Validate Input and Create Session Directory
 
-## Phase 2: Run Gen-Idea
-
-Execute the gen-idea workflow by running:
+Execute IO validation first:
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/scripts/validate-gen-idea-io.sh" <idea-text-or-path> --n <N> --output <idea-output-path>
+```
+
+**If validation fails**: Stop with clear error. Do not create directories or proceed further.
+
+**If validation succeeds**: Create the session directory and resolve output paths:
+```bash
+mkdir -p ".humanize/idea-plan-auto/<slug>/"
 ```
 
 Then execute the full gen-idea workflow as defined in `/humanize:gen-idea` (Phases 0-4: Parse Input, IO Validation, Direction Generation, Parallel Exploration, Synthesis and Write).

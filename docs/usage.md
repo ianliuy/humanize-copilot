@@ -143,29 +143,60 @@ OPTIONS:
   --direct      Use direct mode (skip convergence rounds)
   --max <N>              Maximum RLCR iterations (default: 42)
   --yolo                 Skip quiz and let Claude answer Codex questions
-  --skip-quiz            Skip quiz only
   --claude-answer-codex  Let Claude answer Codex open questions
+  --codex-model <MODEL:EFFORT>
+                         Codex model and reasoning effort
+  --codex-timeout <SECONDS>
+                         Timeout for each Codex review in seconds
+  --track-plan-file      Indicate plan file should be tracked in git
+  --push-every-round     Require git push after each round
+  --base-branch <BRANCH> Base branch for code review phase
+  --full-review-round <N>
+                         Interval for Full Alignment Check rounds
+  --skip-impl            Skip implementation phase, go directly to code review
+  --agent-teams          Enable Agent Teams mode for parallel development
   -h, --help             Show help message
 ```
 
 Auto variant of `gen-plan` that chains directly into the RLCR implementation loop after
-plan generation. Accepts all `gen-plan` arguments plus RLCR pass-through arguments
-(`--max`, `--yolo`, `--skip-quiz`, `--claude-answer-codex`, etc.).
+plan generation. `--skip-quiz` is rejected because it is auto-injected internally.
+Accepts all `gen-plan` arguments plus RLCR pass-through arguments
+(`--max`, `--yolo`, `--claude-answer-codex`, etc.).
 
 ### gen-idea-auto
 
 ```
 /humanize:gen-idea-auto <idea-text-or-file> [OPTIONS]
 
-OPTIONS:
-  --direct      Use direct mode for plan generation
+Gen-idea arguments:
+  --n <int>              Number of exploration directions (default: 6)
+  --output <path>        Idea draft output path (overrides session dir default)
+  --plan-output <path>   Plan file output path (overrides session dir default)
+
+Gen-plan mode arguments:
+  --discussion           Use discussion mode (iterative convergence rounds)
+  --direct               Use direct mode (skip convergence rounds)
+
+RLCR pass-through arguments:
   --max <N>              Maximum RLCR iterations (default: 42)
   --yolo                 Skip quiz and let Claude answer Codex questions
+  --claude-answer-codex  Let Claude answer Codex open questions
+  --codex-model <MODEL:EFFORT>
+                         Codex model and reasoning effort
+  --codex-timeout <SECONDS>
+                         Timeout for each Codex review in seconds
+  --track-plan-file      Indicate plan file should be tracked in git
+  --push-every-round     Require git push after each round
+  --base-branch <BRANCH> Base branch for code review phase
+  --full-review-round <N>
+                         Interval for Full Alignment Check rounds
+  --skip-impl            Skip implementation phase, go directly to code review
+  --agent-teams          Enable Agent Teams mode for parallel development
   -h, --help             Show help message
 ```
 
 Full pipeline: idea → plan → RLCR loop in one command. Pass a string or file path as
-the idea source. Accepts RLCR pass-through arguments.
+the idea source. Accepts gen-idea arguments, gen-plan mode flags, and RLCR pass-through arguments.
 
 ### refine-plan
 

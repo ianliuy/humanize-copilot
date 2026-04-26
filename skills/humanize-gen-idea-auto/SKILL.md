@@ -4,6 +4,21 @@ description: Full auto pipeline — generate idea draft, create plan, and start 
 type: flow
 user-invocable: false
 disable-model-invocation: true
+allowed-tools:
+  - "Bash(${CLAUDE_PLUGIN_ROOT}/scripts/validate-gen-idea-io.sh:*)"
+  - "Bash(${CLAUDE_PLUGIN_ROOT}/scripts/validate-gen-idea-io.cmd:*)"
+  - "Bash(${CLAUDE_PLUGIN_ROOT}/scripts/validate-gen-plan-io.sh:*)"
+  - "Bash(${CLAUDE_PLUGIN_ROOT}/scripts/validate-gen-plan-io.cmd:*)"
+  - "Bash(${CLAUDE_PLUGIN_ROOT}/scripts/ask-codex.sh:*)"
+  - "Bash(${CLAUDE_PLUGIN_ROOT}/scripts/ask-codex.cmd:*)"
+  - "Bash(${CLAUDE_PLUGIN_ROOT}/scripts/setup-rlcr-loop.sh:*)"
+  - "Bash(${CLAUDE_PLUGIN_ROOT}/scripts/setup-rlcr-loop.cmd:*)"
+  - "Read"
+  - "Glob"
+  - "Grep"
+  - "Task"
+  - "Write"
+  - "AskUserQuestion"
 ---
 
 # Humanize Generate Idea Auto

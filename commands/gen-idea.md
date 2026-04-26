@@ -3,6 +3,7 @@ description: "Generate a repo-grounded idea draft via directed-swarm exploration
 argument-hint: "<idea-text-or-path> [--n <int>] [--output <path>]"
 allowed-tools:
   - "Bash(${CLAUDE_PLUGIN_ROOT}/scripts/validate-gen-idea-io.sh:*)"
+  - "Bash(${CLAUDE_PLUGIN_ROOT}/scripts/validate-gen-idea-io.cmd:*)"
   - "Read"
   - "Glob"
   - "Grep"

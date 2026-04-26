@@ -4,12 +4,14 @@ This guide explains how to install the Humanize skills for [Kimi Code CLI](https
 
 ## Overview
 
-Humanize provides four Agent Skills for kimi:
+Humanize provides six Agent Skills for kimi:
 
 | Skill | Type | Purpose |
 |-------|------|---------|
 | `humanize` | Standard | General guidance for all workflows |
 | `humanize-gen-plan` | Flow | Generate structured plan from draft |
+| `humanize-gen-plan-auto` | Flow | Generate plan and auto-start RLCR loop |
+| `humanize-gen-idea-auto` | Flow | Full pipeline: idea → plan → RLCR loop |
 | `humanize-refine-plan` | Flow | Refine annotated plan with CMT blocks |
 | `humanize-rlcr` | Flow | Iterative development with Codex review |
 
@@ -24,7 +26,7 @@ From the Humanize repo root, run:
 ```
 
 This command will:
-- Sync `humanize`, `humanize-gen-plan`, `humanize-refine-plan`, and `humanize-rlcr` into `~/.config/agents/skills`
+- Sync `humanize`, `humanize-gen-plan`, `humanize-gen-plan-auto`, `humanize-gen-idea-auto`, `humanize-refine-plan`, and `humanize-rlcr` into `~/.config/agents/skills`
 - Copy runtime dependencies into `~/.config/agents/skills/humanize`
 
 Common installer script (all targets):
@@ -47,9 +49,11 @@ cd /path/to/humanize
 # Create the skills directory if it doesn't exist
 mkdir -p ~/.config/agents/skills
 
-# Copy all four skills
+# Copy all six skills
 cp -r skills/humanize ~/.config/agents/skills/
 cp -r skills/humanize-gen-plan ~/.config/agents/skills/
+cp -r skills/humanize-gen-plan-auto ~/.config/agents/skills/
+cp -r skills/humanize-gen-idea-auto ~/.config/agents/skills/
 cp -r skills/humanize-refine-plan ~/.config/agents/skills/
 cp -r skills/humanize-rlcr ~/.config/agents/skills/
 
@@ -63,14 +67,14 @@ cp -r config ~/.config/agents/skills/humanize/
 cp -r agents ~/.config/agents/skills/humanize/
 
 # Hydrate runtime root placeholders inside SKILL.md files
-for skill in humanize humanize-gen-plan humanize-refine-plan humanize-rlcr; do
+for skill in humanize humanize-gen-plan humanize-gen-plan-auto humanize-gen-idea-auto humanize-refine-plan humanize-rlcr; do
   sed -i.bak "s|{{HUMANIZE_RUNTIME_ROOT}}|$HOME/.config/agents/skills/humanize|g" \
     "$HOME/.config/agents/skills/$skill/SKILL.md"
 done
 
 # Strip user-invocable flag from SKILL.md files for runtime visibility
 # (This matches the behavior of scripts/install-skill.sh)
-for skill in humanize humanize-gen-plan humanize-refine-plan humanize-rlcr; do
+for skill in humanize humanize-gen-plan humanize-gen-plan-auto humanize-gen-idea-auto humanize-refine-plan humanize-rlcr; do
   awk '
     BEGIN { in_fm = 0; fm_done = 0 }
     /^---[[:space:]]*$/ {
@@ -99,6 +103,8 @@ ls -la ~/.config/agents/skills/
 # Should show:
 # humanize/
 # humanize-gen-plan/
+# humanize-gen-plan-auto/
+# humanize-gen-idea-auto/
 # humanize-refine-plan/
 # humanize-rlcr/
 ```
@@ -200,6 +206,8 @@ To remove the skills:
 ```bash
 rm -rf ~/.config/agents/skills/humanize
 rm -rf ~/.config/agents/skills/humanize-gen-plan
+rm -rf ~/.config/agents/skills/humanize-gen-plan-auto
+rm -rf ~/.config/agents/skills/humanize-gen-idea-auto
 rm -rf ~/.config/agents/skills/humanize-refine-plan
 rm -rf ~/.config/agents/skills/humanize-rlcr
 ```
