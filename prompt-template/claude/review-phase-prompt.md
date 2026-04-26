@@ -27,3 +27,9 @@ Your summary should include:
 - You must address the code review findings to proceed
 - After you commit and write your summary, Codex will perform another code review
 - The loop continues until no `[P0-9]` issues are found
+
+3. Run the RLCR stop gate to trigger Codex review:
+   ```bash
+   bash "${CLAUDE_PLUGIN_ROOT}/scripts/rlcr-stop-gate.sh"
+   ```
+   Handle exit code: 0 = done, 10 = blocked (read feedback, continue), 20 = error

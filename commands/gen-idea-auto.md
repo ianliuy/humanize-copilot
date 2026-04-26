@@ -79,7 +79,12 @@ Store gen-plan mode args + RLCR args as `PLAN_AND_RLCR_ARGS` for the gen-plan-au
 
 4. **Create the session directory** so that `--output` points to an existing parent when passed to the validator:
    ```bash
-   mkdir -p ".humanize/idea-plan-auto/<slug>/"
+   SESSION_DIR=".humanize/idea-plan-auto/<slug>"
+   SESSION_DIR_CREATED_BY_US=false
+   if [[ ! -d "$SESSION_DIR" ]]; then
+       mkdir -p "$SESSION_DIR/"
+       SESSION_DIR_CREATED_BY_US=true
+   fi
    ```
 
 > **Why create before validation?** The validator checks that the output directory exists (`OUTPUT_DIR_NOT_FOUND`). When `--output` is explicit, the validator does NOT auto-create the parent directory. Creating the empty directory here is safe — no output files are written until validation passes. "Fail before file creation" means "fail before writing output files", not "fail before creating empty directories".
@@ -91,11 +96,13 @@ Execute IO validation (the session directory already exists from Phase 1):
 "${CLAUDE_PLUGIN_ROOT}/scripts/validate-gen-idea-io.sh" <idea-text-or-path> --n <N> --output <idea-output-path>
 ```
 
-**If validation fails**: Clean up the created session directory and stop with clear error:
+**If validation fails**: Clean up the session directory only if THIS invocation created it AND it is still empty (no files from a prior session):
 ```bash
-rm -rf ".humanize/idea-plan-auto/<slug>/"
+if [[ "$SESSION_DIR_CREATED_BY_US" == "true" ]] && find "$SESSION_DIR" -maxdepth 0 -empty | grep -q .; then
+    rmdir "$SESSION_DIR"
+fi
 ```
-Do not proceed further.
+Do not use `rm -rf` — the directory may contain data from a prior session. Do not proceed further.
 
 **If validation succeeds**: Continue with the session directory already in place.
 

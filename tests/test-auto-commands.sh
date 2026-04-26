@@ -169,6 +169,55 @@ else
     fail "gen-plan-auto missing Recommended-First rule"
 fi
 
+# ======================================================================
+# Behavioral tests — actually execute scripts and check exit codes
+# ======================================================================
+
+echo "--- Behavioral: validate-gen-idea-io ---"
+
+# Behavioral test: validate-gen-idea-io.sh rejects missing input
+echo "=== Behavioral: validate-gen-idea-io rejects empty input ==="
+exit_code=0
+result=$(bash "$REPO_ROOT/scripts/validate-gen-idea-io.sh" 2>&1) || exit_code=$?
+if [[ "${exit_code}" -eq 1 ]] || [[ "$result" == *"MISSING_IDEA"* ]]; then
+    pass "validate-gen-idea-io rejects empty input (exit $exit_code)"
+else
+    fail "validate-gen-idea-io should reject empty input (got exit $exit_code)"
+fi
+
+# Behavioral test: validate-gen-idea-io.sh rejects invalid --n
+echo "=== Behavioral: validate-gen-idea-io rejects --n 0 ==="
+exit_code=0
+result=$(bash "$REPO_ROOT/scripts/validate-gen-idea-io.sh" --n 0 "test idea" 2>&1) || exit_code=$?
+if [[ "${exit_code}" -eq 6 ]] || [[ "$result" == *"N_OUT_OF_RANGE"* ]]; then
+    pass "validate-gen-idea-io rejects --n 0 (exit $exit_code)"
+else
+    fail "validate-gen-idea-io should reject --n 0 (got exit $exit_code)"
+fi
+
+# Behavioral test: validate-gen-idea-io.sh accepts valid inline idea
+echo "=== Behavioral: validate-gen-idea-io accepts valid inline idea ==="
+exit_code=0
+result=$(bash "$REPO_ROOT/scripts/validate-gen-idea-io.sh" "test idea for auto commands" 2>&1) || exit_code=$?
+if [[ "${exit_code}" -eq 0 ]] && [[ "$result" == *"VALIDATION_SUCCESS"* ]]; then
+    pass "validate-gen-idea-io accepts valid inline idea"
+else
+    fail "validate-gen-idea-io should accept valid inline idea (exit $exit_code)"
+fi
+
+# Behavioral test: validate-gen-idea-io.sh output path handling
+echo "=== Behavioral: validate-gen-idea-io handles output path ==="
+exit_code=0
+_test_output="/tmp/humanize-test-existing-$(date +%s).md"
+result=$(bash "$REPO_ROOT/scripts/validate-gen-idea-io.sh" "test" --output "$_test_output" 2>&1) || exit_code=$?
+if [[ "${exit_code}" -eq 0 ]] || [[ "${exit_code}" -eq 4 ]]; then
+    pass "validate-gen-idea-io handles output path (exit $exit_code)"
+else
+    fail "validate-gen-idea-io output path handling (exit $exit_code)"
+fi
+# Clean up temp files from behavioral tests
+rm -f "$_test_output" 2>/dev/null || true
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [[ $FAIL -eq 0 ]]
