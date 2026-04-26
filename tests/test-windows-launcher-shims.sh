@@ -48,7 +48,7 @@ assert_grep() {
 
 echo "--- Hook launcher pairing ---"
 
-mapfile -t HOOK_SH_PATHS < <(jq -r '.hooks | to_entries[] | .value[] | .hooks[]? | .command' "$PROJECT_ROOT/hooks/hooks.json" | tr -d '\r' | grep -E '/hooks/[^/]+\.sh$')
+mapfile -t HOOK_SH_PATHS < <(jq -r '.hooks | to_entries[] | .value[] | .hooks[]? | .command' "$PROJECT_ROOT/hooks/hooks.json" | tr -d '\r' | grep -oE '/hooks/[^/"]+\.sh')
 
 if (( ${#HOOK_SH_PATHS[@]} != 8 )); then
     fail "expected 8 hook entries in hooks/hooks.json, found ${#HOOK_SH_PATHS[@]}"
@@ -63,23 +63,41 @@ for sh_path in "${HOOK_SH_PATHS[@]}"; do
 done
 
 # ----------------------------------------------------------------------
-# 2. hooks.json windows override per entry, pointing at a real .cmd.
+# 2. hooks.json command entries use the explicit `bash "<path>.sh"` form
+#    so dispatch works on hosts that shell-out the command without honoring
+#    any platform-override field. Earlier iterations of this plan tried a
+#    "windows" platform-override field; empirical testing showed Copilot CLI
+#    does not honor it for plugin hooks, only Claude Code's nested
+#    matcher/hooks structure is supported. The bash-prefix form makes
+#    dispatch work uniformly on Unix, Windows Claude Code (Git Bash), and
+#    Windows Copilot CLI (pwsh resolves bash via PATH, Git for Windows).
 # ----------------------------------------------------------------------
 
-echo "--- hooks.json windows override ---"
+echo "--- hooks.json command bash-prefix form ---"
 
-mapfile -t HOOK_WIN_PATHS < <(jq -r '.hooks | to_entries[] | .value[] | .hooks[]? | .windows // empty' "$PROJECT_ROOT/hooks/hooks.json" | tr -d '\r')
+mapfile -t HOOK_COMMANDS < <(jq -r '.hooks | to_entries[] | .value[] | .hooks[]? | .command' "$PROJECT_ROOT/hooks/hooks.json" | tr -d '\r')
 
-if (( ${#HOOK_WIN_PATHS[@]} != 8 )); then
-    fail "expected 8 windows overrides in hooks/hooks.json, found ${#HOOK_WIN_PATHS[@]}"
+if (( ${#HOOK_COMMANDS[@]} != 8 )); then
+    fail "expected 8 hook command entries in hooks/hooks.json, found ${#HOOK_COMMANDS[@]}"
 else
-    pass "8 windows overrides in hooks/hooks.json"
+    pass "8 hook command entries in hooks/hooks.json"
 fi
 
-for win_path in "${HOOK_WIN_PATHS[@]}"; do
-    expanded="${win_path/\$\{CLAUDE_PLUGIN_ROOT\}/$PROJECT_ROOT}"
-    assert_file_exists "$expanded"
+for cmd_str in "${HOOK_COMMANDS[@]}"; do
+    if [[ "$cmd_str" =~ ^bash[[:space:]]+\"\$\{CLAUDE_PLUGIN_ROOT\}/hooks/[^\"]+\.sh\"$ ]]; then
+        pass "command bash-wrapped: $cmd_str"
+    else
+        fail "command not bash-wrapped (expected 'bash \"\${CLAUDE_PLUGIN_ROOT}/hooks/<name>.sh\"'): $cmd_str"
+    fi
 done
+
+# A leftover "windows" field is harmless but suggests stale config; warn if seen.
+mapfile -t HOOK_WIN_PATHS < <(jq -r '.hooks | to_entries[] | .value[] | .hooks[]? | .windows // empty' "$PROJECT_ROOT/hooks/hooks.json" | tr -d '\r')
+if (( ${#HOOK_WIN_PATHS[@]} > 0 )); then
+    fail "stray 'windows' field in hooks.json (Copilot CLI does not honor it; remove): ${HOOK_WIN_PATHS[*]}"
+else
+    pass "no stray 'windows' fields in hooks.json"
+fi
 
 # ----------------------------------------------------------------------
 # 3. scripts/*.cmd exists for every scripts/*.sh referenced by commands/*.md.
