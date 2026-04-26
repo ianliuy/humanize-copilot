@@ -1,14 +1,14 @@
 {
-  "name": "PolyArch",
+  "name": "ianliuy",
   "owner": {
-    "name": "PolyArch"
+    "name": "ianliuy"
   },
   "plugins": [
     {
       "name": "humanize",
       "source": "./",
-      "description": "Humanize - An iterative development plugin that uses Codex to review Claude's work. Creates a feedback loop where Claude implements plans and Codex independently reviews progress, ensuring quality through continuous refinement.",
-      "version": "1.15.9"
+      "description": "Humanize - An iterative development plugin that uses Codex to review Claude's work. Creates a feedback loop where Claude implements plans and Codex independently reviews progress, ensuring quality through continuous refinement. (Windows fork: explicit bash-prefixed hook dispatch so plugin-loaded hooks.json works under Copilot CLI on Windows.)",
+      "version": "1.15.10"
     }
   ]
 }
