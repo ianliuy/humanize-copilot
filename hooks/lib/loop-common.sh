@@ -283,7 +283,7 @@ run_prompt_exec() {
             if [[ $prompt_size -gt 65536 ]]; then
                 echo "Warning: Prompt is $prompt_size bytes, may exceed platform limits." >&2
             fi
-            (cd "$project_root" && run_with_timeout "$timeout" copilot -p "$prompt" --model "$model" -s --allow-all)
+            (cd "$project_root" && run_with_timeout "$timeout" copilot -p "$prompt" --model "$model" --allow-all)
             ;;
         codex)
             local args=("-m" "$model")
@@ -383,7 +383,7 @@ ${truncation_marker}"
 
             # Substitute diff into template
             local prompt="${template//\{\{DIFF_CONTENT\}\}/$diff_content}"
-            (cd "$project_root" && run_with_timeout "$timeout" copilot -p "$prompt" --model "$model" -s --allow-all)
+            (cd "$project_root" && run_with_timeout "$timeout" copilot -p "$prompt" --model "$model" --allow-all)
             local rc=$?
             if [[ "$_review_is_partial" == "true" && $rc -eq 0 ]]; then
                 echo "Note: This review only covered the first ${max_diff_bytes} bytes of a ${original_size}-byte diff." >&2
