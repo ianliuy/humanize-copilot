@@ -632,6 +632,218 @@ else
 fi
 
 # ========================================
+# Test 29: RLCR state review_cli: copilot is honored
+# ========================================
+echo ""
+echo "--- Test 29: RLCR state review_cli: copilot is honored ---"
+echo ""
+
+setup_test_dir
+STATE_FILE="$TEST_DIR/state.md"
+cat > "$STATE_FILE" <<'STATE_EOF'
+---
+plan_tracked: true
+start_branch: feature
+base_branch: main
+current_round: 1
+max_iterations: 10
+review_cli: copilot
+review_started: true
+---
+# Plan
+STATE_EOF
+
+# Reset state vars to ensure parse_state_file sets them
+STATE_REVIEW_CLI=""
+parse_state_file "$STATE_FILE"
+
+if [[ "$STATE_REVIEW_CLI" == "copilot" ]]; then
+    pass "parse_state_file: review_cli: copilot sets STATE_REVIEW_CLI=copilot"
+else
+    fail "parse_state_file: review_cli: copilot sets STATE_REVIEW_CLI=copilot" "copilot" "$STATE_REVIEW_CLI"
+fi
+
+# ========================================
+# Test 29b: RLCR state review_cli: codex is honored
+# ========================================
+echo ""
+echo "--- Test 29b: RLCR state review_cli: codex is honored ---"
+echo ""
+
+cat > "$STATE_FILE" <<'STATE_EOF'
+---
+plan_tracked: true
+start_branch: feature
+base_branch: main
+current_round: 1
+max_iterations: 10
+review_cli: codex
+review_started: true
+---
+# Plan
+STATE_EOF
+
+STATE_REVIEW_CLI=""
+parse_state_file "$STATE_FILE"
+
+if [[ "$STATE_REVIEW_CLI" == "codex" ]]; then
+    pass "parse_state_file: review_cli: codex sets STATE_REVIEW_CLI=codex"
+else
+    fail "parse_state_file: review_cli: codex sets STATE_REVIEW_CLI=codex" "codex" "$STATE_REVIEW_CLI"
+fi
+
+# ========================================
+# Test 30: Legacy state without review_cli defaults to empty (codex via fallback)
+# ========================================
+echo ""
+echo "--- Test 30: Legacy state without review_cli defaults to empty ---"
+echo ""
+
+setup_test_dir
+STATE_FILE="$TEST_DIR/legacy-state.md"
+cat > "$STATE_FILE" <<'STATE_EOF'
+---
+plan_tracked: true
+start_branch: feature
+base_branch: main
+current_round: 2
+max_iterations: 10
+review_started: true
+---
+# Legacy plan without review_cli field
+STATE_EOF
+
+# Put mock copilot on PATH to prove it's NOT auto-detected during parse
+BIN_DIR="$TEST_DIR/bin"
+create_mock_copilot "$BIN_DIR"
+
+STATE_REVIEW_CLI="stale"
+PATH="$BIN_DIR:$SAFE_BASE_PATH" parse_state_file "$STATE_FILE"
+
+if [[ -z "$STATE_REVIEW_CLI" ]]; then
+    # Verify the fallback expression resolves to codex
+    local_fallback="${STATE_REVIEW_CLI:-codex}"
+    if [[ "$local_fallback" == "codex" ]]; then
+        pass "parse_state_file: legacy state without review_cli is empty, \${:-codex} resolves to codex"
+    else
+        fail "parse_state_file: legacy state without review_cli is empty, \${:-codex} resolves to codex" "codex" "$local_fallback"
+    fi
+else
+    fail "parse_state_file: legacy state without review_cli should be empty" "empty" "$STATE_REVIEW_CLI"
+fi
+
+# ========================================
+# Test 31: HUMANIZE_PREFERRED_CLI=copilot but copilot missing → hard fail
+# ========================================
+echo ""
+echo "--- Test 31: preferred_cli=copilot with copilot missing → hard fail ---"
+echo ""
+
+setup_test_dir
+BIN_DIR="$TEST_DIR/bin"
+# Only codex on PATH, no copilot
+create_mock_binary "$BIN_DIR" "codex"
+
+exit_code=0
+stderr_out=""
+stderr_out=$(PATH="$BIN_DIR:$SAFE_BASE_PATH" HUMANIZE_PREFERRED_CLI=copilot detect_review_cli 2>&1 >/dev/null) || exit_code=$?
+
+if [[ $exit_code -ne 0 ]] && echo "$stderr_out" | grep -qi "copilot"; then
+    pass "detect_review_cli: preferred copilot + missing copilot → hard fail (exit $exit_code)"
+else
+    fail "detect_review_cli: preferred copilot + missing copilot → hard fail" "non-zero exit + copilot error" "exit=$exit_code, stderr=$stderr_out"
+fi
+
+# ========================================
+# Test 32: HUMANIZE_PREFERRED_CLI=codex but codex missing → hard fail
+# ========================================
+echo ""
+echo "--- Test 32: preferred_cli=codex with codex missing → hard fail ---"
+echo ""
+
+setup_test_dir
+BIN_DIR="$TEST_DIR/bin"
+# Only copilot on PATH, no codex
+create_mock_copilot "$BIN_DIR"
+
+exit_code=0
+stderr_out=""
+stderr_out=$(PATH="$BIN_DIR:$SAFE_BASE_PATH" HUMANIZE_PREFERRED_CLI=codex detect_review_cli 2>&1 >/dev/null) || exit_code=$?
+
+if [[ $exit_code -ne 0 ]] && echo "$stderr_out" | grep -qi "codex"; then
+    pass "detect_review_cli: preferred codex + missing codex → hard fail (exit $exit_code)"
+else
+    fail "detect_review_cli: preferred codex + missing codex → hard fail" "non-zero exit + codex error" "exit=$exit_code, stderr=$stderr_out"
+fi
+
+# ========================================
+# Test 33: Neither CLI installed → hard fail (regardless of preference)
+# ========================================
+echo ""
+echo "--- Test 33: Neither CLI installed → hard fail ---"
+echo ""
+
+exit_code=0
+stderr_out=""
+stderr_out=$(PATH="$SAFE_BASE_PATH" HUMANIZE_PREFERRED_CLI=auto detect_review_cli 2>&1 >/dev/null) || exit_code=$?
+
+if [[ $exit_code -ne 0 ]] && echo "$stderr_out" | grep -qi "neither"; then
+    pass "detect_review_cli: neither installed + auto → hard fail (exit $exit_code)"
+else
+    fail "detect_review_cli: neither installed + auto → hard fail" "non-zero exit + neither error" "exit=$exit_code, stderr=$stderr_out"
+fi
+
+# ========================================
+# Test 34: run_diff_review prompt size bounded (copilot backend)
+# ========================================
+echo ""
+echo "--- Test 34: run_diff_review prompt size bounded for copilot ---"
+echo ""
+
+setup_test_dir
+BOUNDED_PROJECT="$TEST_DIR/bounded-project"
+init_test_git_repo "$BOUNDED_PROJECT"
+
+# Create a file >32KB (40000 bytes) and commit
+dd if=/dev/zero bs=1 count=40000 2>/dev/null | tr '\0' 'X' > "$BOUNDED_PROJECT/medium.txt"
+(cd "$BOUNDED_PROJECT" && git add medium.txt && git commit -q -m "Add medium file")
+
+# Create a mock copilot that captures the -p argument length to a file
+MOCK_BIN="$TEST_DIR/mock-bin-bounded"
+CAPTURE_FILE="$TEST_DIR/captured_length.txt"
+mkdir -p "$MOCK_BIN"
+cat > "$MOCK_BIN/copilot" << MOCK_EOF
+#!/bin/bash
+# Capture -p argument length
+while [[ \$# -gt 0 ]]; do
+    case "\$1" in
+        -p) shift; echo "\${#1}" > "$CAPTURE_FILE"; shift ;;
+        *) shift ;;
+    esac
+done
+echo "mock review output"
+exit 0
+MOCK_EOF
+chmod +x "$MOCK_BIN/copilot"
+
+exit_code=0
+PATH="$MOCK_BIN:$PATH" \
+    CLAUDE_PLUGIN_ROOT="$TEST_DIR/no-plugin" \
+    run_diff_review "HEAD~1" "gpt-5.4" "high" "$BOUNDED_PROJECT" 30 "copilot" >/dev/null 2>&1 || exit_code=$?
+
+if [[ -f "$CAPTURE_FILE" ]]; then
+    captured_len=$(cat "$CAPTURE_FILE")
+    # 40KB file diff should be under 64KB + template overhead ≈ ~70KB max
+    if [[ $captured_len -le 75000 ]]; then
+        pass "run_diff_review: copilot -p argument is bounded ($captured_len bytes ≤ 75000)"
+    else
+        fail "run_diff_review: copilot -p argument is bounded" "≤ 75000 bytes" "$captured_len bytes"
+    fi
+else
+    fail "run_diff_review: copilot -p argument is bounded" "capture file exists" "capture file not created (exit=$exit_code)"
+fi
+
+# ========================================
 # Summary
 # ========================================
 
