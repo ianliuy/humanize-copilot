@@ -318,6 +318,9 @@ run_diff_review() {
     shift 6
     local extra_args=("$@")
 
+    # Maximum total prompt size for Copilot -p argument (safe for all platforms including Windows)
+    : "${COPILOT_PROMPT_CEILING:=32768}"
+
     case "$cli" in
         copilot)
             local diff_content
@@ -329,24 +332,15 @@ run_diff_review() {
                 echo "No changes detected between $base_ref and HEAD" >&2
                 return 1
             fi
-            # Truncate large diffs to avoid argv-length failures
-            local diff_size=${#diff_content}
-            local max_diff_bytes=32768  # 32KB - safe for command-line across platforms
-            if [[ $diff_size -gt $max_diff_bytes ]]; then
-                echo "Warning: Diff is $diff_size bytes, truncating to ${max_diff_bytes} bytes for review safety." >&2
-                diff_content="${diff_content:0:$max_diff_bytes}
 
-[... diff truncated at ${max_diff_bytes} bytes out of ${diff_size}. Review covers the first portion of changes only.]"
-            fi
+            # Load template first so we can compute overhead
             local template_file="${CLAUDE_PLUGIN_ROOT:-}/prompt-template/codex/diff-review-prompt.md"
-            local prompt
+            local template
             if [[ -f "$template_file" ]]; then
-                local template
                 template="$(cat "$template_file")"
-                prompt="${template//\{\{DIFF_CONTENT\}\}/$diff_content}"
             else
                 # Fallback inline prompt if template missing
-                prompt="Review the following code changes. For each issue found, output it in this format:
+                template="Review the following code changes. For each issue found, output it in this format:
 - [P<severity 0-9>] <description> - <file path>
   <detailed explanation>
 
@@ -354,9 +348,30 @@ Where P0 is critical, P1 is high priority, down to P9 for trivial.
 If no issues are found, say 'No issues found.'
 
 \`\`\`diff
-$diff_content
+{{DIFF_CONTENT}}
 \`\`\`"
             fi
+
+            # Compute available budget for diff content
+            local template_overhead=${#template}
+            local truncation_marker="[... diff truncated. Review covers the first portion of changes only.]"
+            local marker_overhead=${#truncation_marker}
+            local max_diff_bytes=$((COPILOT_PROMPT_CEILING - template_overhead - marker_overhead - 100))
+
+            if [[ $max_diff_bytes -lt 1024 ]]; then
+                echo "Error: Template too large ($template_overhead bytes), no room for diff content" >&2
+                return 1
+            fi
+
+            # Truncate diff if needed
+            if [[ ${#diff_content} -gt $max_diff_bytes ]]; then
+                echo "Warning: Diff is ${#diff_content} bytes, truncating to ${max_diff_bytes} bytes (prompt ceiling: ${COPILOT_PROMPT_CEILING})." >&2
+                diff_content="${diff_content:0:$max_diff_bytes}
+${truncation_marker}"
+            fi
+
+            # Substitute diff into template
+            local prompt="${template//\{\{DIFF_CONTENT\}\}/$diff_content}"
             run_with_timeout "$timeout" copilot -p "$prompt" --model "$model" -s --allow-all
             ;;
         codex)

@@ -833,11 +833,12 @@ PATH="$MOCK_BIN:$PATH" \
 
 if [[ -f "$CAPTURE_FILE" ]]; then
     captured_len=$(cat "$CAPTURE_FILE")
-    # 40KB file diff should be under 64KB + template overhead ≈ ~70KB max
-    if [[ $captured_len -le 75000 ]]; then
-        pass "run_diff_review: copilot -p argument is bounded ($captured_len bytes ≤ 75000)"
+    # Use the same ceiling constant from loop-common.sh (default 32768)
+    : "${COPILOT_PROMPT_CEILING:=32768}"
+    if [[ $captured_len -le $COPILOT_PROMPT_CEILING ]]; then
+        pass "run_diff_review: copilot -p argument is bounded ($captured_len bytes ≤ $COPILOT_PROMPT_CEILING)"
     else
-        fail "run_diff_review: copilot -p argument is bounded" "≤ 75000 bytes" "$captured_len bytes"
+        fail "run_diff_review: copilot -p argument is bounded" "≤ $COPILOT_PROMPT_CEILING bytes" "$captured_len bytes"
     fi
 else
     fail "run_diff_review: copilot -p argument is bounded" "capture file exists" "capture file not created (exit=$exit_code)"

@@ -145,17 +145,10 @@ MOCK_CODEX
     export PATH="$OUTPUT_DIR/mock-bin:$PATH"
 fi
 
-# Provide a mock copilot binary when the real one is not installed.
-# Similar to codex mock above - satisfies `command -v copilot` checks.
-if ! command -v copilot &>/dev/null; then
-    mkdir -p "$OUTPUT_DIR/mock-bin"
-    cat > "$OUTPUT_DIR/mock-bin/copilot" << 'MOCK_COPILOT'
-#!/bin/bash
-exit 0
-MOCK_COPILOT
-    chmod +x "$OUTPUT_DIR/mock-bin/copilot"
-    export PATH="$OUTPUT_DIR/mock-bin:$PATH"
-fi
+# NOTE: No global mock copilot binary. Tests that need copilot detection
+# create their own mock in a test-local PATH. A global copilot mock would
+# cause auto-detection to prefer copilot over codex, breaking tests that
+# assume codex-only behavior.
 
 # Check if a suite needs zsh
 needs_zsh() {
