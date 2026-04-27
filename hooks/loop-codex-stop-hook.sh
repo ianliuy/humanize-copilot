@@ -113,6 +113,8 @@ MAX_ITERATIONS="$STATE_MAX_ITERATIONS"
 PUSH_EVERY_ROUND="$STATE_PUSH_EVERY_ROUND"
 FULL_REVIEW_ROUND="${STATE_FULL_REVIEW_ROUND:-5}"
 REVIEW_STARTED="$STATE_REVIEW_STARTED"
+# Frozen review CLI from state (defaulting to codex for backward compat with old state files)
+FROZEN_REVIEW_CLI="${STATE_REVIEW_CLI:-codex}"
 CODEX_EXEC_MODEL="${STATE_CODEX_MODEL:-$DEFAULT_CODEX_MODEL}"
 CODEX_EXEC_EFFORT="${STATE_CODEX_EFFORT:-$DEFAULT_CODEX_EFFORT}"
 CODEX_REVIEW_MODEL="$CODEX_EXEC_MODEL"
@@ -944,17 +946,17 @@ fi
 # Initialize these before the REVIEW_STARTED guard so they are available in both
 # impl phase (codex exec) and review phase (codex review)
 
-# First, check if a review CLI (copilot or codex) exists
-REVIEW_CLI="$(detect_review_cli)" || {
+# Use frozen review CLI from state, defaulting to codex for backward compatibility
+REVIEW_CLI="${FROZEN_REVIEW_CLI}"
+if ! command -v "$REVIEW_CLI" &>/dev/null; then
     REASON="# Review CLI Not Found
 
-Neither 'copilot' nor 'codex' CLI is installed or in PATH.
-RLCR loop requires one of them to perform reviews.
+The '$REVIEW_CLI' CLI (frozen at loop start) is not installed or not in PATH.
+RLCR loop requires it to perform reviews.
 
 **To fix:**
-1. Install Copilot CLI: https://docs.github.com/en/copilot
-2. Or install Codex CLI: https://github.com/openai/codex
-3. Retry the exit
+1. Install the required CLI
+2. Retry the exit
 
 Or use \`/cancel-rlcr-loop\` to end the loop."
     cat <<EOF
@@ -964,8 +966,8 @@ Or use \`/cancel-rlcr-loop\` to end the loop."
 }
 EOF
     exit 0
-}
-echo "Review CLI: $REVIEW_CLI" >&2
+fi
+echo "Review CLI: $REVIEW_CLI (frozen from state)" >&2
 
 # Debug log files go to XDG_CACHE_HOME/humanize/<project-path>/<timestamp>/ to avoid polluting project dir
 # Respects XDG_CACHE_HOME for testability in restricted environments (falls back to $HOME/.cache)

@@ -712,22 +712,31 @@ fi
 # Priority: user input > remote default > local main > local master
 
 if [[ -n "$BASE_BRANCH" ]]; then
-    # User specified base branch - validate it exists LOCALLY
-    # codex review --base requires a local ref, so remote-only branches won't work
-    if run_with_timeout "$GIT_TIMEOUT" git -C "$PROJECT_ROOT" show-ref --verify --quiet "refs/heads/$BASE_BRANCH" 2>/dev/null; then
-        : # Branch exists locally, good
-    else
-        # Check if it exists on remote but not locally
-        if run_with_timeout "$GIT_TIMEOUT" git -C "$PROJECT_ROOT" ls-remote --heads origin "$BASE_BRANCH" 2>/dev/null | grep -q .; then
-            echo "Error: Base branch '$BASE_BRANCH' exists on remote but not locally" >&2
-            echo "  codex review requires a local branch reference" >&2
-            echo "  Run: git fetch origin $BASE_BRANCH:$BASE_BRANCH" >&2
-            exit 1
+    if [[ "$REVIEW_CLI" == "codex" ]]; then
+        # codex review --base requires a local branch ref, so remote-only branches won't work
+        if run_with_timeout "$GIT_TIMEOUT" git -C "$PROJECT_ROOT" show-ref --verify --quiet "refs/heads/$BASE_BRANCH" 2>/dev/null; then
+            : # Branch exists locally, good
         else
-            echo "Error: Specified base branch does not exist: $BASE_BRANCH" >&2
-            echo "  Not found locally or on any remote" >&2
+            # Check if it exists on remote but not locally
+            if run_with_timeout "$GIT_TIMEOUT" git -C "$PROJECT_ROOT" ls-remote --heads origin "$BASE_BRANCH" 2>/dev/null | grep -q .; then
+                echo "Error: Base branch '$BASE_BRANCH' exists on remote but not locally" >&2
+                echo "  codex review requires a local branch reference" >&2
+                echo "  Run: git fetch origin $BASE_BRANCH:$BASE_BRANCH" >&2
+                exit 1
+            else
+                echo "Error: Specified base branch does not exist: $BASE_BRANCH" >&2
+                echo "  Not found locally or on any remote" >&2
+                exit 1
+            fi
+        fi
+    else
+        # copilot: prompt-based review works from any ref that resolves to a commit
+        # Just verify the ref resolves to a valid commit SHA
+        if ! git -C "$PROJECT_ROOT" rev-parse --verify "$BASE_BRANCH" &>/dev/null; then
+            echo "Error: Cannot resolve '$BASE_BRANCH' to a valid commit" >&2
             exit 1
         fi
+        echo "Base ref '$BASE_BRANCH' resolves to $(git -C "$PROJECT_ROOT" rev-parse "$BASE_BRANCH")" >&2
     fi
 else
     # Auto-detect base branch

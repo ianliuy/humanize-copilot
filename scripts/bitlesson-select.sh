@@ -166,7 +166,6 @@ SELECTOR_TIMEOUT=120
 
 CODEX_EXIT_CODE=0
 if [[ "$BITLESSON_PROVIDER" == "codex" ]]; then
-    local review_cli
     review_cli="$(detect_review_cli 2>/dev/null)" || review_cli="codex"
 
     RAW_OUTPUT="$(run_prompt_exec "$PROMPT" "$BITLESSON_MODEL" "high" "$CODEX_PROJECT_ROOT" "$SELECTOR_TIMEOUT" "$review_cli")" || CODEX_EXIT_CODE=$?

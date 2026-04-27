@@ -1304,25 +1304,25 @@ List bots that should be removed from active tracking (those with APPROVE status
 $GOAL_TRACKER_UPDATE_INSTRUCTIONS
 EOF
 
-# Check if a review CLI (copilot or codex) is available
-REVIEW_CLI="$(detect_review_cli)" || {
+# Use frozen review CLI from state, defaulting to codex for backward compatibility
+REVIEW_CLI="${PR_REVIEW_CLI:-codex}"
+if ! command -v "$REVIEW_CLI" &>/dev/null; then
     REASON="# Review CLI Not Found
 
-Neither 'copilot' nor 'codex' CLI is installed or in PATH.
-PR loop requires one of them to validate bot reviews.
+The '$REVIEW_CLI' CLI (frozen at loop start) is not installed or not in PATH.
+PR loop requires it to validate bot reviews.
 
 **To fix:**
-1. Install Copilot CLI: https://docs.github.com/en/copilot
-2. Or install Codex CLI: https://github.com/openai/codex
-3. Retry the exit
+1. Install the required CLI
+2. Retry the exit
 
 Or use \`/humanize:cancel-pr-loop\` to cancel the loop."
 
     jq -n --arg reason "$REASON" --arg msg "PR Loop: Review CLI not found" \
         '{"decision": "block", "reason": $reason, "systemMessage": $msg}'
     exit 0
-}
-echo "Review CLI: $REVIEW_CLI" >&2
+fi
+echo "Review CLI: $REVIEW_CLI (frozen from state)" >&2
 
 # Run Codex
 CODEX_ARGS=("-m" "$PR_CODEX_MODEL")
