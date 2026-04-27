@@ -283,7 +283,7 @@ run_prompt_exec() {
             if [[ $prompt_size -gt 65536 ]]; then
                 echo "Warning: Prompt is $prompt_size bytes, may exceed platform limits." >&2
             fi
-            run_with_timeout "$timeout" copilot -p "$prompt" --model "$model" -s --allow-all
+            (cd "$project_root" && run_with_timeout "$timeout" copilot -p "$prompt" --model "$model" -s --allow-all)
             ;;
         codex)
             local args=("-m" "$model")
@@ -323,13 +323,20 @@ run_diff_review() {
 
     case "$cli" in
         copilot)
+            # Include both committed and working-tree changes (staged + unstaged)
+            # to match what codex review --base sees. Use diff against base_ref
+            # without restricting to HEAD so uncommitted work is included.
             local diff_content
-            diff_content="$(cd "$project_root" && git diff "$base_ref" HEAD)" || {
+            diff_content="$(cd "$project_root" && git diff "$base_ref")" || {
                 echo "Error: Failed to compute git diff against $base_ref" >&2
                 return 1
             }
             if [[ -z "$diff_content" ]]; then
-                echo "No changes detected between $base_ref and HEAD" >&2
+                # Also check staged changes
+                diff_content="$(cd "$project_root" && git diff --cached "$base_ref")" || true
+            fi
+            if [[ -z "$diff_content" ]]; then
+                echo "No changes detected between $base_ref and working tree" >&2
                 return 1
             fi
 
@@ -363,16 +370,25 @@ If no issues are found, say 'No issues found.'
                 return 1
             fi
 
-            # Truncate diff if needed
+            # Truncate diff if needed — mark review as partial
+            local _review_is_partial=false
             if [[ ${#diff_content} -gt $max_diff_bytes ]]; then
-                echo "Warning: Diff is ${#diff_content} bytes, truncating to ${max_diff_bytes} bytes (prompt ceiling: ${COPILOT_PROMPT_CEILING})." >&2
+                local original_size=${#diff_content}
+                echo "Warning: Diff is ${original_size} bytes, truncating to ${max_diff_bytes} bytes (prompt ceiling: ${COPILOT_PROMPT_CEILING})." >&2
+                echo "Warning: Review will be PARTIAL — files beyond the truncation point are not reviewed." >&2
                 diff_content="${diff_content:0:$max_diff_bytes}
 ${truncation_marker}"
+                _review_is_partial=true
             fi
 
             # Substitute diff into template
             local prompt="${template//\{\{DIFF_CONTENT\}\}/$diff_content}"
-            run_with_timeout "$timeout" copilot -p "$prompt" --model "$model" -s --allow-all
+            (cd "$project_root" && run_with_timeout "$timeout" copilot -p "$prompt" --model "$model" -s --allow-all)
+            local rc=$?
+            if [[ "$_review_is_partial" == "true" && $rc -eq 0 ]]; then
+                echo "Note: This review only covered the first ${max_diff_bytes} bytes of a ${original_size}-byte diff." >&2
+            fi
+            return $rc
             ;;
         codex)
             local args=("--base" "$base_ref")
