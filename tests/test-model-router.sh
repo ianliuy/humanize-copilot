@@ -9,6 +9,9 @@ source "$PROJECT_ROOT/scripts/lib/model-router.sh"
 
 SAFE_BASE_PATH="/usr/bin:/bin:/usr/sbin:/sbin"
 
+# Source loop-common.sh for detect_review_cli tests
+source "$PROJECT_ROOT/hooks/lib/loop-common.sh"
+
 echo "=========================================="
 echo "Model Router Tests"
 echo "=========================================="
@@ -24,6 +27,16 @@ create_mock_binary() {
 exit 0
 EOF
     chmod +x "$bin_dir/$binary_name"
+}
+
+create_mock_copilot() {
+    local bin_dir="$1"
+    mkdir -p "$bin_dir"
+    cat > "$bin_dir/copilot" <<'EOF'
+#!/bin/bash
+exit 0
+EOF
+    chmod +x "$bin_dir/copilot"
 }
 
 # ========================================
@@ -417,6 +430,130 @@ if [[ $exit_code -ne 0 ]] && echo "$stderr_out" | grep -qiE "unknown effort|erro
     pass "map_effort: unknown codex effort exits non-zero with error"
 else
     fail "map_effort: unknown codex effort exits non-zero with error" "non-zero exit + error message" "exit=$exit_code, stderr=$stderr_out"
+fi
+
+# ========================================
+# Test 21: detect_review_cli returns copilot when both on PATH
+# ========================================
+echo ""
+echo "--- Test 21: detect_review_cli returns copilot when both on PATH ---"
+echo ""
+
+setup_test_dir
+BIN_DIR="$TEST_DIR/bin"
+create_mock_copilot "$BIN_DIR"
+create_mock_binary "$BIN_DIR" "codex"
+
+result=""
+exit_code=0
+result=$(PATH="$BIN_DIR:$SAFE_BASE_PATH" detect_review_cli 2>/dev/null) || exit_code=$?
+
+if [[ $exit_code -eq 0 ]] && [[ "$result" == "copilot" ]]; then
+    pass "detect_review_cli: both on PATH returns copilot"
+else
+    fail "detect_review_cli: both on PATH returns copilot" "exit 0 + copilot" "exit=$exit_code, output=$result"
+fi
+
+# ========================================
+# Test 22: detect_review_cli returns copilot when only copilot on PATH
+# ========================================
+echo ""
+echo "--- Test 22: detect_review_cli returns copilot when only copilot ---"
+echo ""
+
+setup_test_dir
+BIN_DIR="$TEST_DIR/bin"
+create_mock_copilot "$BIN_DIR"
+
+result=""
+exit_code=0
+result=$(PATH="$BIN_DIR:$SAFE_BASE_PATH" detect_review_cli 2>/dev/null) || exit_code=$?
+
+if [[ $exit_code -eq 0 ]] && [[ "$result" == "copilot" ]]; then
+    pass "detect_review_cli: only copilot returns copilot"
+else
+    fail "detect_review_cli: only copilot returns copilot" "exit 0 + copilot" "exit=$exit_code, output=$result"
+fi
+
+# ========================================
+# Test 23: detect_review_cli returns codex when only codex on PATH
+# ========================================
+echo ""
+echo "--- Test 23: detect_review_cli returns codex when only codex ---"
+echo ""
+
+setup_test_dir
+BIN_DIR="$TEST_DIR/bin"
+create_mock_binary "$BIN_DIR" "codex"
+
+result=""
+exit_code=0
+result=$(PATH="$BIN_DIR:$SAFE_BASE_PATH" detect_review_cli 2>/dev/null) || exit_code=$?
+
+if [[ $exit_code -eq 0 ]] && [[ "$result" == "codex" ]]; then
+    pass "detect_review_cli: only codex returns codex"
+else
+    fail "detect_review_cli: only codex returns codex" "exit 0 + codex" "exit=$exit_code, output=$result"
+fi
+
+# ========================================
+# Test 24: detect_review_cli returns error when neither on PATH
+# ========================================
+echo ""
+echo "--- Test 24: detect_review_cli errors when neither on PATH ---"
+echo ""
+
+exit_code=0
+stderr_out=""
+stderr_out=$(PATH="$SAFE_BASE_PATH" detect_review_cli 2>&1 >/dev/null) || exit_code=$?
+
+if [[ $exit_code -ne 0 ]] && echo "$stderr_out" | grep -qi "neither"; then
+    pass "detect_review_cli: neither on PATH exits non-zero with error"
+else
+    fail "detect_review_cli: neither on PATH exits non-zero with error" "non-zero exit + error message" "exit=$exit_code, stderr=$stderr_out"
+fi
+
+# ========================================
+# Test 25: HUMANIZE_PREFERRED_CLI=codex with both installed returns codex
+# ========================================
+echo ""
+echo "--- Test 25: HUMANIZE_PREFERRED_CLI=codex overrides auto ---"
+echo ""
+
+setup_test_dir
+BIN_DIR="$TEST_DIR/bin"
+create_mock_copilot "$BIN_DIR"
+create_mock_binary "$BIN_DIR" "codex"
+
+result=""
+exit_code=0
+result=$(PATH="$BIN_DIR:$SAFE_BASE_PATH" HUMANIZE_PREFERRED_CLI=codex detect_review_cli 2>/dev/null) || exit_code=$?
+
+if [[ $exit_code -eq 0 ]] && [[ "$result" == "codex" ]]; then
+    pass "detect_review_cli: HUMANIZE_PREFERRED_CLI=codex returns codex"
+else
+    fail "detect_review_cli: HUMANIZE_PREFERRED_CLI=codex returns codex" "exit 0 + codex" "exit=$exit_code, output=$result"
+fi
+
+# ========================================
+# Test 26: HUMANIZE_PREFERRED_CLI=copilot with copilot missing returns error
+# ========================================
+echo ""
+echo "--- Test 26: HUMANIZE_PREFERRED_CLI=copilot but copilot missing ---"
+echo ""
+
+setup_test_dir
+BIN_DIR="$TEST_DIR/bin"
+create_mock_binary "$BIN_DIR" "codex"
+
+exit_code=0
+stderr_out=""
+stderr_out=$(PATH="$BIN_DIR:$SAFE_BASE_PATH" HUMANIZE_PREFERRED_CLI=copilot detect_review_cli 2>&1 >/dev/null) || exit_code=$?
+
+if [[ $exit_code -ne 0 ]] && echo "$stderr_out" | grep -qi "copilot"; then
+    pass "detect_review_cli: preferred copilot but missing exits non-zero"
+else
+    fail "detect_review_cli: preferred copilot but missing exits non-zero" "non-zero exit + copilot in stderr" "exit=$exit_code, stderr=$stderr_out"
 fi
 
 # ========================================

@@ -97,6 +97,7 @@ parse_pr_loop_state() {
     PR_CODEX_MODEL=$(echo "$STATE_FRONTMATTER" | grep "^codex_model:" | sed "s/codex_model: *//" | tr -d ' ' || true)
     PR_CODEX_EFFORT=$(echo "$STATE_FRONTMATTER" | grep "^codex_effort:" | sed "s/codex_effort: *//" | tr -d ' ' || true)
     PR_CODEX_TIMEOUT=$(echo "$STATE_FRONTMATTER" | grep "^codex_timeout:" | sed "s/codex_timeout: *//" | tr -d ' ' || true)
+    PR_REVIEW_CLI=$(echo "$STATE_FRONTMATTER" | grep "^review_cli:" | sed "s/review_cli: *//" | tr -d ' ' || true)
     PR_POLL_INTERVAL=$(echo "$STATE_FRONTMATTER" | grep "^poll_interval:" | sed "s/poll_interval: *//" | tr -d ' ' || true)
     PR_POLL_TIMEOUT=$(echo "$STATE_FRONTMATTER" | grep "^poll_timeout:" | sed "s/poll_timeout: *//" | tr -d ' ' || true)
     PR_STARTED_AT=$(echo "$STATE_FRONTMATTER" | grep "^started_at:" | sed "s/started_at: *//" || true)
@@ -1112,6 +1113,7 @@ if [[ "$COMMENT_COUNT" == "0" ]]; then
                 echo "codex_model: $PR_CODEX_MODEL"
                 echo "codex_effort: $PR_CODEX_EFFORT"
                 echo "codex_timeout: $PR_CODEX_TIMEOUT"
+                echo "review_cli: ${PR_REVIEW_CLI:-codex}"
                 echo "poll_interval: $PR_POLL_INTERVAL"
                 echo "poll_timeout: $PR_POLL_TIMEOUT"
                 echo "started_at: $PR_STARTED_AT"
@@ -1302,23 +1304,25 @@ List bots that should be removed from active tracking (those with APPROVE status
 $GOAL_TRACKER_UPDATE_INSTRUCTIONS
 EOF
 
-# Check if codex is available
-if ! command -v codex &>/dev/null; then
-    REASON="# Codex Not Found
+# Check if a review CLI (copilot or codex) is available
+REVIEW_CLI="$(detect_review_cli)" || {
+    REASON="# Review CLI Not Found
 
-The 'codex' command is not installed or not in PATH.
-PR loop requires Codex CLI to validate bot reviews.
+Neither 'copilot' nor 'codex' CLI is installed or in PATH.
+PR loop requires one of them to validate bot reviews.
 
 **To fix:**
-1. Install Codex CLI
-2. Retry the exit
+1. Install Copilot CLI: https://docs.github.com/en/copilot
+2. Or install Codex CLI: https://github.com/openai/codex
+3. Retry the exit
 
 Or use \`/humanize:cancel-pr-loop\` to cancel the loop."
 
-    jq -n --arg reason "$REASON" --arg msg "PR Loop: Codex not found" \
+    jq -n --arg reason "$REASON" --arg msg "PR Loop: Review CLI not found" \
         '{"decision": "block", "reason": $reason, "systemMessage": $msg}'
     exit 0
-fi
+}
+echo "Review CLI: $REVIEW_CLI" >&2
 
 # Run Codex
 CODEX_ARGS=("-m" "$PR_CODEX_MODEL")
@@ -1339,7 +1343,7 @@ CODEX_ARGS+=("$CODEX_AUTO_FLAG" "-C" "$PROJECT_ROOT")
 CODEX_PROMPT_CONTENT=$(cat "$CODEX_PROMPT_FILE")
 CODEX_EXIT_CODE=0
 
-printf '%s' "$CODEX_PROMPT_CONTENT" | run_with_timeout "$PR_CODEX_TIMEOUT" codex exec "${CODEX_ARGS[@]}" - \
+run_prompt_exec "$CODEX_PROMPT_CONTENT" "$PR_CODEX_MODEL" "$PR_CODEX_EFFORT" "$PROJECT_ROOT" "$PR_CODEX_TIMEOUT" "$REVIEW_CLI" \
     > "$CHECK_FILE" 2>/dev/null || CODEX_EXIT_CODE=$?
 
 if [[ $CODEX_EXIT_CODE -ne 0 ]]; then

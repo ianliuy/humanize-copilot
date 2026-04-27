@@ -434,6 +434,94 @@ else
 fi
 
 # ========================================
+# CLI Backend Selection Tests
+# ========================================
+
+echo ""
+echo "--- CLI Backend Selection Tests ---"
+echo ""
+
+# Test: when only mock copilot on PATH, ask-codex uses copilot backend
+setup_test_dir
+COPILOT_PROJECT="$TEST_DIR/copilot-project"
+init_test_git_repo "$COPILOT_PROJECT"
+
+COPILOT_BIN_DIR="$TEST_DIR/copilot-bin"
+mkdir -p "$COPILOT_BIN_DIR"
+
+cat > "$COPILOT_BIN_DIR/copilot" << 'COPILOT_MOCK_EOF'
+#!/bin/bash
+# Mock copilot binary for testing ask-codex.sh CLI selection
+if [[ -n "${MOCK_CODEX_STDERR:-}" ]]; then
+    echo "$MOCK_CODEX_STDERR" >&2
+fi
+if [[ -n "${MOCK_CODEX_STDOUT:-}" ]]; then
+    echo "$MOCK_CODEX_STDOUT"
+fi
+exit "${MOCK_CODEX_EXIT_CODE:-0}"
+COPILOT_MOCK_EOF
+chmod +x "$COPILOT_BIN_DIR/copilot"
+
+reset_mock
+export MOCK_CODEX_STDOUT="copilot-only-response"
+COPILOT_STDERR=""
+COPILOT_STDOUT=""
+EXIT_CODE=0
+COPILOT_STDOUT=$(cd "$COPILOT_PROJECT" && \
+    CLAUDE_PROJECT_DIR="$COPILOT_PROJECT" \
+    XDG_CACHE_HOME="$TEST_DIR/cache" \
+    PATH="$COPILOT_BIN_DIR:/usr/bin:/bin:/usr/sbin:/sbin" \
+    bash "$ASK_CODEX_SCRIPT" "copilot test" 2>"$TEST_DIR/copilot-stderr.txt") || EXIT_CODE=$?
+COPILOT_STDERR="$(cat "$TEST_DIR/copilot-stderr.txt" 2>/dev/null)"
+
+if [[ $EXIT_CODE -eq 0 ]] && echo "$COPILOT_STDERR" | grep -q "cli=copilot"; then
+    pass "CLI selection: only copilot on PATH uses copilot backend"
+else
+    fail "CLI selection: only copilot on PATH uses copilot backend" "exit 0 + cli=copilot in stderr" "exit=$EXIT_CODE, stderr=$COPILOT_STDERR"
+fi
+
+# Test: when both mock copilot and mock codex on PATH, uses copilot
+BOTH_BIN_DIR="$TEST_DIR/both-bin"
+mkdir -p "$BOTH_BIN_DIR"
+cp "$COPILOT_BIN_DIR/copilot" "$BOTH_BIN_DIR/copilot"
+cp "$MOCK_BIN_DIR/codex" "$BOTH_BIN_DIR/codex"
+
+reset_mock
+export MOCK_CODEX_STDOUT="both-available-response"
+EXIT_CODE=0
+BOTH_STDERR=""
+cd "$COPILOT_PROJECT" && \
+    CLAUDE_PROJECT_DIR="$COPILOT_PROJECT" \
+    XDG_CACHE_HOME="$TEST_DIR/cache" \
+    PATH="$BOTH_BIN_DIR:/usr/bin:/bin:/usr/sbin:/sbin" \
+    bash "$ASK_CODEX_SCRIPT" "both test" >/dev/null 2>"$TEST_DIR/both-stderr.txt" || EXIT_CODE=$?
+BOTH_STDERR="$(cat "$TEST_DIR/both-stderr.txt" 2>/dev/null)"
+
+if echo "$BOTH_STDERR" | grep -q "cli=copilot"; then
+    pass "CLI selection: both on PATH uses copilot backend"
+else
+    fail "CLI selection: both on PATH uses copilot backend" "cli=copilot in stderr" "stderr=$BOTH_STDERR"
+fi
+
+# Test: when only mock codex on PATH, uses codex (existing behavior)
+reset_mock
+export MOCK_CODEX_STDOUT="codex-only-response"
+EXIT_CODE=0
+CODEX_STDERR=""
+cd "$COPILOT_PROJECT" && \
+    CLAUDE_PROJECT_DIR="$COPILOT_PROJECT" \
+    XDG_CACHE_HOME="$TEST_DIR/cache" \
+    PATH="$MOCK_BIN_DIR:/usr/bin:/bin:/usr/sbin:/sbin" \
+    bash "$ASK_CODEX_SCRIPT" "codex test" >/dev/null 2>"$TEST_DIR/codex-stderr.txt" || EXIT_CODE=$?
+CODEX_STDERR="$(cat "$TEST_DIR/codex-stderr.txt" 2>/dev/null)"
+
+if echo "$CODEX_STDERR" | grep -q "cli=codex"; then
+    pass "CLI selection: only codex on PATH uses codex backend"
+else
+    fail "CLI selection: only codex on PATH uses codex backend" "cli=codex in stderr" "stderr=$CODEX_STDERR"
+fi
+
+# ========================================
 # Summary
 # ========================================
 

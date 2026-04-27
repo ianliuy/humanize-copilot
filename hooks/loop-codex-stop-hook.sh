@@ -944,19 +944,19 @@ fi
 # Initialize these before the REVIEW_STARTED guard so they are available in both
 # impl phase (codex exec) and review phase (codex review)
 
-# First, check if Codex CLI exists
-if ! command -v codex >/dev/null 2>&1; then
-    REASON="# Codex CLI Not Found
+# First, check if a review CLI (copilot or codex) exists
+REVIEW_CLI="$(detect_review_cli)" || {
+    REASON="# Review CLI Not Found
 
-The 'codex' CLI is not installed or not in PATH.
-RLCR loop requires it to perform reviews.
+Neither 'copilot' nor 'codex' CLI is installed or in PATH.
+RLCR loop requires one of them to perform reviews.
 
 **To fix:**
-1. Install Codex CLI: https://github.com/openai/codex
-2. Retry the exit
+1. Install Copilot CLI: https://docs.github.com/en/copilot
+2. Or install Codex CLI: https://github.com/openai/codex
+3. Retry the exit
 
 Or use \`/cancel-rlcr-loop\` to end the loop."
-
     cat <<EOF
 {
     "decision": "block",
@@ -964,7 +964,8 @@ Or use \`/cancel-rlcr-loop\` to end the loop."
 }
 EOF
     exit 0
-fi
+}
+echo "Review CLI: $REVIEW_CLI" >&2
 
 # Debug log files go to XDG_CACHE_HOME/humanize/<project-path>/<timestamp>/ to avoid polluting project dir
 # Respects XDG_CACHE_HOME for testability in restricted environments (falls back to $HOME/.cache)
@@ -1063,7 +1064,7 @@ Provider: codex
     echo "Running codex review with timeout ${CODEX_TIMEOUT}s in $PROJECT_ROOT (base: $review_base)..." >&2
 
     CODEX_REVIEW_EXIT_CODE=0
-    (cd "$PROJECT_ROOT" && run_with_timeout "$CODEX_TIMEOUT" codex review --base "$review_base" "${CODEX_REVIEW_ARGS[@]}") \
+    run_diff_review "$review_base" "$CODEX_REVIEW_MODEL" "$CODEX_REVIEW_EFFORT" "$PROJECT_ROOT" "$CODEX_TIMEOUT" "$REVIEW_CLI" \
         > "$CODEX_REVIEW_LOG_FILE" 2>&1 || CODEX_REVIEW_EXIT_CODE=$?
 
     echo "Code review exit code: $CODEX_REVIEW_EXIT_CODE" >&2
@@ -1397,7 +1398,7 @@ echo "Codex command saved to: $CODEX_CMD_FILE" >&2
 echo "Running summary review with timeout ${CODEX_TIMEOUT}s..." >&2
 
 CODEX_EXIT_CODE=0
-printf '%s' "$CODEX_PROMPT_CONTENT" | run_with_timeout "$CODEX_TIMEOUT" codex exec "${CODEX_EXEC_ARGS[@]}" - \
+run_prompt_exec "$CODEX_PROMPT_CONTENT" "$CODEX_EXEC_MODEL" "$CODEX_EXEC_EFFORT" "$PROJECT_ROOT" "$CODEX_TIMEOUT" "$REVIEW_CLI" \
     > "$CODEX_STDOUT_FILE" 2> "$CODEX_STDERR_FILE" || CODEX_EXIT_CODE=$?
 
 echo "Codex exit code: $CODEX_EXIT_CODE" >&2

@@ -268,13 +268,14 @@ if ! gh auth status &>/dev/null 2>&1; then
     exit 1
 fi
 
-# Check codex is available
-if ! command -v codex &>/dev/null; then
-    echo "Error: start-pr-loop requires codex to run" >&2
-    echo "" >&2
-    echo "Please install Codex CLI: https://openai.com/codex" >&2
+# Check if a review CLI (copilot or codex) is available
+REVIEW_CLI="$(detect_review_cli)" || {
+    echo "Error: Neither 'copilot' nor 'codex' CLI found in PATH." >&2
+    echo "  Install Copilot CLI: https://docs.github.com/en/copilot" >&2
+    echo "  Or install Codex CLI: https://github.com/openai/codex" >&2
     exit 1
-fi
+}
+echo "Review CLI: $REVIEW_CLI" >&2
 
 # ========================================
 # Detect PR
@@ -623,6 +624,7 @@ active_bots:${ACTIVE_BOTS_YAML}
 codex_model: $CODEX_MODEL
 codex_effort: $CODEX_EFFORT
 codex_timeout: $CODEX_TIMEOUT
+review_cli: $REVIEW_CLI
 poll_interval: $POLL_INTERVAL
 poll_timeout: $POLL_TIMEOUT
 started_at: $(date -u +%Y-%m-%dT%H:%M:%SZ)

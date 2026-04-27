@@ -964,6 +964,109 @@ fi
 echo ""
 
 # ========================================
+# preferred_cli config key tests
+# ========================================
+
+echo "--- preferred_cli config key ---"
+
+if ! command -v jq >/dev/null 2>&1; then
+    skip "preferred_cli config tests require jq" "jq not found"
+else
+    # Test: default_config.json contains preferred_cli: auto
+    assert_eq "default_config.json: preferred_cli is auto" \
+        "auto" "$(jq -r '.preferred_cli' "$DEFAULT_CONFIG")"
+fi
+
+if [[ ! -f "$LOOP_COMMON" ]]; then
+    skip "preferred_cli tests require loop-common.sh" "file not found"
+else
+    # Test: config with preferred_cli: copilot is read correctly
+    setup_test_dir
+    CLI_PROJECT="$TEST_DIR/cli-copilot-project"
+    mkdir -p "$CLI_PROJECT/.humanize"
+    printf '{"preferred_cli": "copilot"}' > "$CLI_PROJECT/.humanize/config.json"
+
+    result=$(bash -c "
+        export CLAUDE_PROJECT_DIR='$CLI_PROJECT'
+        export XDG_CONFIG_HOME='$TEST_DIR/no-user-config'
+        source '$LOOP_COMMON' 2>/dev/null
+        echo \"\$DEFAULT_PREFERRED_CLI\"
+    " 2>/dev/null || echo "ERROR")
+
+    assert_eq "preferred_cli config: 'copilot' is loaded" \
+        "copilot" "$result"
+
+    # Test: config with preferred_cli: codex is read correctly
+    setup_test_dir
+    CLI_PROJECT="$TEST_DIR/cli-codex-project"
+    mkdir -p "$CLI_PROJECT/.humanize"
+    printf '{"preferred_cli": "codex"}' > "$CLI_PROJECT/.humanize/config.json"
+
+    result=$(bash -c "
+        export CLAUDE_PROJECT_DIR='$CLI_PROJECT'
+        export XDG_CONFIG_HOME='$TEST_DIR/no-user-config'
+        source '$LOOP_COMMON' 2>/dev/null
+        echo \"\$DEFAULT_PREFERRED_CLI\"
+    " 2>/dev/null || echo "ERROR")
+
+    assert_eq "preferred_cli config: 'codex' is loaded" \
+        "codex" "$result"
+
+    # Test: config with preferred_cli: auto (default) works
+    setup_test_dir
+    CLI_PROJECT="$TEST_DIR/cli-auto-project"
+    mkdir -p "$CLI_PROJECT/.humanize"
+    printf '{"preferred_cli": "auto"}' > "$CLI_PROJECT/.humanize/config.json"
+
+    result=$(bash -c "
+        export CLAUDE_PROJECT_DIR='$CLI_PROJECT'
+        export XDG_CONFIG_HOME='$TEST_DIR/no-user-config'
+        source '$LOOP_COMMON' 2>/dev/null
+        echo \"\$DEFAULT_PREFERRED_CLI\"
+    " 2>/dev/null || echo "ERROR")
+
+    assert_eq "preferred_cli config: 'auto' is loaded" \
+        "auto" "$result"
+
+    # Test: invalid preferred_cli value triggers warning and falls back to auto
+    setup_test_dir
+    CLI_PROJECT="$TEST_DIR/cli-invalid-project"
+    mkdir -p "$CLI_PROJECT/.humanize"
+    printf '{"preferred_cli": "invalid-cli"}' > "$CLI_PROJECT/.humanize/config.json"
+
+    MOCK_BIN_DIR="$TEST_DIR/mock-bin"
+    mkdir -p "$MOCK_BIN_DIR"
+    cat > "$MOCK_BIN_DIR/copilot" << 'EOF'
+#!/bin/bash
+exit 0
+EOF
+    chmod +x "$MOCK_BIN_DIR/copilot"
+
+    result=$(bash -c "
+        export CLAUDE_PROJECT_DIR='$CLI_PROJECT'
+        export XDG_CONFIG_HOME='$TEST_DIR/no-user-config'
+        export PATH='$MOCK_BIN_DIR:$PATH'
+        source '$LOOP_COMMON'
+        detect_review_cli
+    " 2>"$TEST_DIR/cli-invalid-stderr.txt" || echo "ERROR")
+    invalid_stderr="$(cat "$TEST_DIR/cli-invalid-stderr.txt" 2>/dev/null)"
+
+    if echo "$invalid_stderr" | grep -qi "unknown preferred_cli"; then
+        pass "preferred_cli config: invalid value produces warning"
+    else
+        fail "preferred_cli config: invalid value produces warning" "Warning about unknown preferred_cli" "stderr=$invalid_stderr"
+    fi
+
+    if [[ "$result" == "copilot" ]]; then
+        pass "preferred_cli config: invalid value falls back to auto-detect"
+    else
+        fail "preferred_cli config: invalid value falls back to auto-detect" "copilot (auto-detect)" "result=$result"
+    fi
+fi
+
+echo ""
+
+# ========================================
 # Summary
 # ========================================
 

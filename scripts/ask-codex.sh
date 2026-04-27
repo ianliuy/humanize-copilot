@@ -150,14 +150,16 @@ QUESTION="${QUESTION_PARTS[*]}"
 # Validate Prerequisites
 # ========================================
 
-# Check codex is available
-if ! command -v codex &>/dev/null; then
-    echo "Error: 'codex' command is not installed or not in PATH" >&2
+# Detect review CLI (copilot or codex)
+REVIEW_CLI="$(detect_review_cli)" || {
     echo "" >&2
-    echo "Please install Codex CLI: https://github.com/openai/codex" >&2
+    echo "Please install Copilot CLI or Codex CLI:" >&2
+    echo "  Copilot: https://docs.github.com/en/copilot" >&2
+    echo "  Codex:   https://github.com/openai/codex" >&2
     echo "Then retry: /humanize:ask-codex <your question>" >&2
     exit 1
-fi
+}
+echo "ask-codex: using $REVIEW_CLI backend" >&2
 
 # Check question is not empty
 if [[ -z "$QUESTION" ]]; then
@@ -240,19 +242,8 @@ EOF
 # Build Codex Command
 # ========================================
 
-# Build codex exec arguments (same pattern as loop-codex-stop-hook.sh)
-CODEX_EXEC_ARGS=("-m" "$CODEX_MODEL")
-if [[ -n "$CODEX_EFFORT" ]]; then
-    CODEX_EXEC_ARGS+=("-c" "model_reasoning_effort=${CODEX_EFFORT}")
-fi
-
-# Determine automation flag based on environment variable
-CODEX_AUTO_FLAG="--full-auto"
-if [[ "${HUMANIZE_CODEX_BYPASS_SANDBOX:-}" == "true" ]] || [[ "${HUMANIZE_CODEX_BYPASS_SANDBOX:-}" == "1" ]]; then
-    CODEX_AUTO_FLAG="--dangerously-bypass-approvals-and-sandbox"
-fi
-
-CODEX_EXEC_ARGS+=("$CODEX_AUTO_FLAG" "-C" "$PROJECT_ROOT")
+# Arguments are now built by run_prompt_exec() internally
+# Keep model/effort for debug logging below
 
 # ========================================
 # Save Debug Command
@@ -268,7 +259,8 @@ CODEX_STDERR_FILE="$CACHE_DIR/codex-run.log"
     echo "# Working directory: $PROJECT_ROOT"
     echo "# Timeout: $CODEX_TIMEOUT seconds"
     echo ""
-    echo "codex exec ${CODEX_EXEC_ARGS[*]} \"<prompt>\""
+    echo "# Backend: $REVIEW_CLI"
+    echo "# Model: $CODEX_MODEL, Effort: $CODEX_EFFORT"
     echo ""
     echo "# Prompt content:"
     echo "$QUESTION"
@@ -280,7 +272,7 @@ CODEX_STDERR_FILE="$CACHE_DIR/codex-run.log"
 
 echo "ask-codex: model=$CODEX_MODEL effort=$CODEX_EFFORT timeout=${CODEX_TIMEOUT}s" >&2
 echo "ask-codex: cache=$CACHE_DIR" >&2
-echo "ask-codex: running codex exec..." >&2
+echo "ask-codex: running via $REVIEW_CLI backend..." >&2
 
 # Portable epoch-to-ISO8601 formatter (GNU date -d vs BSD date -r)
 epoch_to_iso() {
@@ -293,7 +285,7 @@ epoch_to_iso() {
 START_TIME=$(date +%s)
 
 CODEX_EXIT_CODE=0
-printf '%s' "$QUESTION" | run_with_timeout "$CODEX_TIMEOUT" codex exec "${CODEX_EXEC_ARGS[@]}" - \
+run_prompt_exec "$QUESTION" "$CODEX_MODEL" "$CODEX_EFFORT" "$PROJECT_ROOT" "$CODEX_TIMEOUT" "$REVIEW_CLI" \
     > "$CODEX_STDOUT_FILE" 2> "$CODEX_STDERR_FILE" || CODEX_EXIT_CODE=$?
 
 END_TIME=$(date +%s)

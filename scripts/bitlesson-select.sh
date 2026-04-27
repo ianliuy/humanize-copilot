@@ -166,16 +166,10 @@ SELECTOR_TIMEOUT=120
 
 CODEX_EXIT_CODE=0
 if [[ "$BITLESSON_PROVIDER" == "codex" ]]; then
-    CODEX_EXEC_ARGS=("-m" "$BITLESSON_MODEL" "-c" "model_reasoning_effort=high")
+    local review_cli
+    review_cli="$(detect_review_cli 2>/dev/null)" || review_cli="codex"
 
-    # Determine automation flag based on environment variable (same as ask-codex.sh)
-    CODEX_AUTO_FLAG="--full-auto"
-    if [[ "${HUMANIZE_CODEX_BYPASS_SANDBOX:-}" == "true" ]] || [[ "${HUMANIZE_CODEX_BYPASS_SANDBOX:-}" == "1" ]]; then
-        CODEX_AUTO_FLAG="--dangerously-bypass-approvals-and-sandbox"
-    fi
-    CODEX_EXEC_ARGS+=("$CODEX_AUTO_FLAG" "-C" "$CODEX_PROJECT_ROOT")
-
-    RAW_OUTPUT="$(printf '%s' "$PROMPT" | run_with_timeout "$SELECTOR_TIMEOUT" codex exec "${CODEX_EXEC_ARGS[@]}" -)" || CODEX_EXIT_CODE=$?
+    RAW_OUTPUT="$(run_prompt_exec "$PROMPT" "$BITLESSON_MODEL" "high" "$CODEX_PROJECT_ROOT" "$SELECTOR_TIMEOUT" "$review_cli")" || CODEX_EXIT_CODE=$?
 elif [[ "$BITLESSON_PROVIDER" == "claude" ]]; then
     RAW_OUTPUT="$(printf '%s' "$PROMPT" | run_with_timeout "$SELECTOR_TIMEOUT" claude --print --model "$BITLESSON_MODEL" -)" || CODEX_EXIT_CODE=$?
 fi

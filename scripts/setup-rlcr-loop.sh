@@ -294,9 +294,13 @@ PROJECT_ROOT="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 
 MISSING_DEPS=()
 
-if ! command -v codex &>/dev/null; then
-    MISSING_DEPS+=("codex  - Install: https://github.com/openai/codex")
-fi
+REVIEW_CLI="$(detect_review_cli)" || {
+    echo "Error: Neither 'copilot' nor 'codex' CLI found in PATH." >&2
+    echo "  Install Copilot CLI: https://docs.github.com/en/copilot" >&2
+    echo "  Or install Codex CLI: https://github.com/openai/codex" >&2
+    exit 1
+}
+echo "Review CLI: $REVIEW_CLI" >&2
 
 if ! command -v jq &>/dev/null; then
     MISSING_DEPS+=("jq     - Install: https://jqlang.github.io/jq/download/")
@@ -846,6 +850,7 @@ max_iterations: $MAX_ITERATIONS
 codex_model: $CODEX_MODEL
 codex_effort: $CODEX_EFFORT
 codex_timeout: $CODEX_TIMEOUT
+review_cli: $REVIEW_CLI
 push_every_round: $PUSH_EVERY_ROUND
 full_review_round: $FULL_REVIEW_ROUND
 plan_file: $PLAN_FILE

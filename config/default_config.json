@@ -1,6 +1,7 @@
 {
   "codex_model": "gpt-5.4",
   "codex_effort": "high",
+  "preferred_cli": "auto",
   "bitlesson_model": "haiku",
   "agent_teams": false,
   "alternative_plan_language": "",

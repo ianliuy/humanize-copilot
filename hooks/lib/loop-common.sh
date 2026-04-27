@@ -38,6 +38,7 @@ readonly FIELD_FULL_REVIEW_ROUND="full_review_round"
 readonly FIELD_ASK_CODEX_QUESTION="ask_codex_question"
 readonly FIELD_SESSION_ID="session_id"
 readonly FIELD_AGENT_TEAMS="agent_teams"
+readonly FIELD_REVIEW_CLI="review_cli"
 
 # Default Codex configuration (single source of truth - all scripts reference this)
 # Scripts can pre-set DEFAULT_CODEX_MODEL/DEFAULT_CODEX_EFFORT before sourcing to override.
@@ -208,9 +209,164 @@ DEFAULT_CODEX_EFFORT="${DEFAULT_CODEX_EFFORT:-${_cfg_codex_effort:-high}}"
 # Precedence: pre-set by caller (e.g. --agent-teams flag) > config value > hardcoded fallback (false)
 _cfg_agent_teams="$(get_config_value "$_LOOP_COMMON_CONFIG" "agent_teams" 2>/dev/null || true)"
 DEFAULT_AGENT_TEAMS="${DEFAULT_AGENT_TEAMS:-${_cfg_agent_teams:-false}}"
-unset _cfg_codex_model _cfg_codex_effort _cfg_agent_teams
+
+# Load preferred_cli from merged config (controls which CLI backend to use for AI review)
+# Precedence: HUMANIZE_PREFERRED_CLI env > config value > hardcoded fallback (auto)
+_cfg_preferred_cli="$(get_config_value "$_LOOP_COMMON_CONFIG" "preferred_cli" 2>/dev/null || true)"
+DEFAULT_PREFERRED_CLI="${DEFAULT_PREFERRED_CLI:-${_cfg_preferred_cli:-auto}}"
+unset _cfg_codex_model _cfg_codex_effort _cfg_agent_teams _cfg_preferred_cli
 
 unset _LOOP_COMMON_PROJECT_ROOT _LOOP_COMMON_CONFIG
+
+# ========================================
+# CLI backend detection and dispatch
+# ========================================
+
+# Detect which review CLI to use (copilot or codex)
+# Priority: HUMANIZE_PREFERRED_CLI env var > config preferred_cli > auto-detect
+# In auto mode: prefer copilot if available, fall back to codex
+# Echoes "copilot" or "codex" to stdout; returns 1 on error
+detect_review_cli() {
+    local preferred="${HUMANIZE_PREFERRED_CLI:-${DEFAULT_PREFERRED_CLI:-auto}}"
+
+    case "$preferred" in
+        copilot)
+            if ! command -v copilot &>/dev/null; then
+                echo "Error: preferred_cli is 'copilot' but copilot is not installed or not in PATH." >&2
+                return 1
+            fi
+            echo "copilot"
+            ;;
+        codex)
+            if ! command -v codex &>/dev/null; then
+                echo "Error: preferred_cli is 'codex' but codex is not installed or not in PATH." >&2
+                return 1
+            fi
+            echo "codex"
+            ;;
+        auto)
+            if command -v copilot &>/dev/null; then
+                echo "copilot"
+            elif command -v codex &>/dev/null; then
+                echo "codex"
+            else
+                echo "Error: Neither 'copilot' nor 'codex' found in PATH." >&2
+                return 1
+            fi
+            ;;
+        *)
+            echo "Warning: Unknown preferred_cli value '$preferred'. Falling back to auto-detect." >&2
+            # Recurse with auto
+            HUMANIZE_PREFERRED_CLI="auto" detect_review_cli
+            ;;
+    esac
+}
+
+# Run a prompt through the selected review CLI
+# Arguments: prompt, model, effort, project_root, timeout, cli_backend
+# The cli_backend argument should be "copilot" or "codex"
+# For copilot: uses copilot -p with --model, -s, --allow-all
+# For codex: uses printf | codex exec with -m, -c effort, --full-auto, -C
+# The HUMANIZE_CODEX_BYPASS_SANDBOX env var is respected for codex (--dangerously-bypass-approvals-and-sandbox)
+run_prompt_exec() {
+    local prompt="$1"
+    local model="$2"
+    local effort="$3"
+    local project_root="$4"
+    local timeout="$5"
+    local cli="${6:-codex}"
+
+    case "$cli" in
+        copilot)
+            run_with_timeout "$timeout" copilot -p "$prompt" --model "$model" -s --allow-all
+            ;;
+        codex)
+            local args=("-m" "$model")
+            if [[ -n "$effort" ]]; then
+                args+=("-c" "model_reasoning_effort=${effort}")
+            fi
+            local auto_flag="--full-auto"
+            if [[ "${HUMANIZE_CODEX_BYPASS_SANDBOX:-}" == "true" ]] || [[ "${HUMANIZE_CODEX_BYPASS_SANDBOX:-}" == "1" ]]; then
+                auto_flag="--dangerously-bypass-approvals-and-sandbox"
+            fi
+            args+=("$auto_flag" "-C" "$project_root")
+            printf '%s' "$prompt" | run_with_timeout "$timeout" codex exec "${args[@]}" -
+            ;;
+        *)
+            echo "Error: Unknown review CLI '$cli'. Expected 'copilot' or 'codex'." >&2
+            return 1
+            ;;
+    esac
+}
+
+# Run diff-based code review through the selected CLI
+# For codex: uses native codex review --base (built-in diff review)
+# For copilot: computes git diff and sends through diff-review prompt template
+# Arguments: base_ref, model, effort, project_root, timeout, cli_backend, [review_args...]
+run_diff_review() {
+    local base_ref="$1"
+    local model="$2"
+    local effort="$3"
+    local project_root="$4"
+    local timeout="$5"
+    local cli="${6:-codex}"
+    shift 6
+    local extra_args=("$@")
+
+    case "$cli" in
+        copilot)
+            local diff_content
+            diff_content="$(cd "$project_root" && git diff "$base_ref" HEAD)" || {
+                echo "Error: Failed to compute git diff against $base_ref" >&2
+                return 1
+            }
+            if [[ -z "$diff_content" ]]; then
+                echo "No changes detected between $base_ref and HEAD" >&2
+                return 1
+            fi
+            # Check diff size - warn if very large (>100KB)
+            local diff_size=${#diff_content}
+            if [[ $diff_size -gt 102400 ]]; then
+                echo "Warning: Large diff ($diff_size bytes). Review may be truncated." >&2
+            fi
+            local template_file="${CLAUDE_PLUGIN_ROOT:-}/prompt-template/codex/diff-review-prompt.md"
+            local prompt
+            if [[ -f "$template_file" ]]; then
+                local template
+                template="$(cat "$template_file")"
+                prompt="${template//\{\{DIFF_CONTENT\}\}/$diff_content}"
+            else
+                # Fallback inline prompt if template missing
+                prompt="Review the following code changes. For each issue found, output it in this format:
+- [P<severity 0-9>] <description> - <file path>
+  <detailed explanation>
+
+Where P0 is critical, P1 is high priority, down to P9 for trivial.
+If no issues are found, say 'No issues found.'
+
+\`\`\`diff
+$diff_content
+\`\`\`"
+            fi
+            run_with_timeout "$timeout" copilot -p "$prompt" --model "$model" -s --allow-all
+            ;;
+        codex)
+            local args=("--base" "$base_ref")
+            if [[ -n "$model" ]]; then
+                args+=("-c" "model=${model}" "-c" "review_model=${model}")
+            fi
+            if [[ -n "$effort" ]]; then
+                args+=("-c" "model_reasoning_effort=${effort}")
+            fi
+            args+=("${extra_args[@]}")
+            (cd "$project_root" && run_with_timeout "$timeout" codex review "${args[@]}")
+            ;;
+        *)
+            echo "Error: Unknown review CLI '$cli'. Expected 'copilot' or 'codex'." >&2
+            return 1
+            ;;
+    esac
+}
 
 source "$LOOP_COMMON_DIR/template-loader.sh"
 
@@ -380,6 +536,7 @@ _parse_state_fields() {
     STATE_CODEX_MODEL=$(echo "$STATE_FRONTMATTER" | grep "^${FIELD_CODEX_MODEL}:" | sed "s/${FIELD_CODEX_MODEL}: *//" | tr -d ' ' || true)
     STATE_CODEX_EFFORT=$(echo "$STATE_FRONTMATTER" | grep "^${FIELD_CODEX_EFFORT}:" | sed "s/${FIELD_CODEX_EFFORT}: *//" | tr -d ' ' || true)
     STATE_CODEX_TIMEOUT=$(echo "$STATE_FRONTMATTER" | grep "^${FIELD_CODEX_TIMEOUT}:" | sed "s/${FIELD_CODEX_TIMEOUT}: *//" | tr -d ' ' || true)
+    STATE_REVIEW_CLI=$(echo "$STATE_FRONTMATTER" | grep "^${FIELD_REVIEW_CLI}:" | sed "s/${FIELD_REVIEW_CLI}: *//" | tr -d ' ' || true)
     STATE_REVIEW_STARTED=$(echo "$STATE_FRONTMATTER" | grep "^${FIELD_REVIEW_STARTED}:" | sed "s/${FIELD_REVIEW_STARTED}: *//" | tr -d ' ' || true)
     STATE_FULL_REVIEW_ROUND=$(echo "$STATE_FRONTMATTER" | grep "^${FIELD_FULL_REVIEW_ROUND}:" | sed "s/${FIELD_FULL_REVIEW_ROUND}: *//" | tr -d ' ' || true)
     STATE_ASK_CODEX_QUESTION=$(echo "$STATE_FRONTMATTER" | grep "^${FIELD_ASK_CODEX_QUESTION}:" | sed "s/${FIELD_ASK_CODEX_QUESTION}: *//" | tr -d ' ' || true)
@@ -401,6 +558,7 @@ _parse_state_fields() {
 #   STATE_CODEX_MODEL - codex model name
 #   STATE_CODEX_EFFORT - codex effort level
 #   STATE_CODEX_TIMEOUT - codex timeout in seconds
+#   STATE_REVIEW_CLI - review CLI name (copilot or codex)
 #   STATE_REVIEW_STARTED - "true" or "false"
 #   STATE_FULL_REVIEW_ROUND - interval for Full Alignment Check (default: 5)
 #   STATE_ASK_CODEX_QUESTION - "true" or "false" (v1.6.5+)

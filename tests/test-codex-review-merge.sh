@@ -354,6 +354,40 @@ else
 fi
 
 # ========================================
+# Test 13: Prompt-based review output uses same [P?] format
+# ========================================
+echo "Test 13: detect_review_issues handles prompt-based review output (same [P?] format)"
+setup_test_env
+
+# Simulate output from copilot prompt-based review (same format as codex review
+# because our diff-review-prompt.md template instructs the same output format)
+cat > "$CACHE_DIR/round-13-codex-review.log" << 'EOF'
+I've reviewed the code changes between the base and HEAD.
+
+Here are the issues I found:
+
+- [P1] Potential null pointer dereference - /src/handler.py:88-92
+  The `request.body` field is accessed without checking if the request
+  object is None first. This could crash in production.
+
+- [P3] Missing error handling - /src/handler.py:120-125
+  The database call does not handle connection errors gracefully.
+
+Overall the changes look reasonable but these issues should be addressed.
+EOF
+
+set +e
+OUTPUT=$(detect_review_issues 13 2>/dev/null)
+RESULT=$?
+set -e
+
+if [[ $RESULT -eq 0 ]] && echo "$OUTPUT" | grep -q '\[P1\]' && echo "$OUTPUT" | grep -q '\[P3\]'; then
+    pass "Prompt-based review output detected with [P?] markers"
+else
+    fail "Prompt-based review output" "return 0, output contains [P1] and [P3]" "return $RESULT, output: $OUTPUT"
+fi
+
+# ========================================
 # Summary
 # ========================================
 echo ""
