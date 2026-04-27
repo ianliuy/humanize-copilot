@@ -1067,6 +1067,99 @@ fi
 echo ""
 
 # ========================================
+# STATE_REVIEW_CLI parsing from state file
+# ========================================
+
+echo "--- STATE_REVIEW_CLI parsing ---"
+
+if [[ ! -f "$LOOP_COMMON" ]]; then
+    skip "STATE_REVIEW_CLI tests require loop-common.sh" "file not found"
+else
+    # State with review_cli: copilot → STATE_REVIEW_CLI is "copilot"
+    setup_test_dir
+    cat > "$TEST_DIR/review-cli-copilot-state.md" << 'CLI_STATE_EOF'
+---
+current_round: 1
+max_iterations: 10
+codex_model: gpt-5.4
+codex_effort: high
+codex_timeout: 3600
+push_every_round: false
+full_review_round: 5
+plan_file: plan.md
+plan_tracked: false
+start_branch: feature
+base_branch: main
+base_commit: abc123
+review_started: false
+review_cli: copilot
+ask_codex_question: true
+session_id: test-cli
+agent_teams: false
+---
+CLI_STATE_EOF
+
+    result=$(bash -c "
+        source '$LOOP_COMMON' 2>/dev/null
+        parse_state_file '$TEST_DIR/review-cli-copilot-state.md'
+        echo \"\$STATE_REVIEW_CLI\"
+    " 2>/dev/null || echo "ERROR")
+
+    assert_eq "STATE_REVIEW_CLI: state with review_cli: copilot → 'copilot'" \
+        "copilot" "$result"
+
+    # State WITHOUT review_cli → STATE_REVIEW_CLI defaults to empty (backward compat: callers default to codex)
+    setup_test_dir
+    cat > "$TEST_DIR/no-review-cli-state.md" << 'NO_CLI_EOF'
+---
+current_round: 1
+max_iterations: 10
+codex_model: gpt-5.4
+codex_effort: high
+codex_timeout: 3600
+push_every_round: false
+full_review_round: 5
+plan_file: plan.md
+plan_tracked: false
+start_branch: feature
+base_branch: main
+base_commit: abc123
+review_started: false
+ask_codex_question: true
+session_id: legacy-test
+agent_teams: false
+---
+NO_CLI_EOF
+
+    result=$(bash -c "
+        source '$LOOP_COMMON' 2>/dev/null
+        parse_state_file '$TEST_DIR/no-review-cli-state.md'
+        # Mimic stop-hook fallback: empty STATE_REVIEW_CLI defaults to 'codex'
+        EFFECTIVE_CLI=\"\${STATE_REVIEW_CLI:-codex}\"
+        echo \"\$EFFECTIVE_CLI\"
+    " 2>/dev/null || echo "ERROR")
+
+    assert_eq "STATE_REVIEW_CLI: legacy state without review_cli defaults to 'codex'" \
+        "codex" "$result"
+
+    # Verify that STATE_REVIEW_CLI is literally empty when not in state
+    result=$(bash -c "
+        source '$LOOP_COMMON' 2>/dev/null
+        parse_state_file '$TEST_DIR/no-review-cli-state.md'
+        if [[ -z \"\$STATE_REVIEW_CLI\" ]]; then
+            echo 'EMPTY'
+        else
+            echo \"\$STATE_REVIEW_CLI\"
+        fi
+    " 2>/dev/null || echo "ERROR")
+
+    assert_eq "STATE_REVIEW_CLI: legacy state parses to empty string" \
+        "EMPTY" "$result"
+fi
+
+echo ""
+
+# ========================================
 # Summary
 # ========================================
 

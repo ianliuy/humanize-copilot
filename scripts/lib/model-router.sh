@@ -52,7 +52,9 @@ check_provider_dependency() {
 
     echo "Error: Required binary '$binary' was not found in PATH for provider '$provider'." >&2
     if [[ "$provider" == "codex" ]]; then
-        echo "Install: https://github.com/openai/codex" >&2
+        echo "Please install Copilot CLI or Codex CLI:" >&2
+        echo "  Copilot: https://docs.github.com/en/copilot" >&2
+        echo "  Codex:   https://github.com/openai/codex" >&2
     else
         echo "Install Claude Code CLI" >&2
     fi

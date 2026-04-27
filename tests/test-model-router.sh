@@ -557,6 +557,81 @@ else
 fi
 
 # ========================================
+# Test 27: run_diff_review truncates large diffs (>64KB)
+# ========================================
+echo ""
+echo "--- Test 27: run_diff_review truncates large diffs >64KB ---"
+echo ""
+
+setup_test_dir
+LARGE_DIFF_PROJECT="$TEST_DIR/large-diff-project"
+init_test_git_repo "$LARGE_DIFF_PROJECT"
+
+# Create a file >64KB (70000 bytes) and commit it
+dd if=/dev/zero bs=1 count=70000 2>/dev/null | tr '\0' 'A' > "$LARGE_DIFF_PROJECT/bigfile.txt"
+(cd "$LARGE_DIFF_PROJECT" && git add bigfile.txt && git commit -q -m "Add large file")
+
+# Create a mock copilot that just echoes its -p argument length
+MOCK_BIN="$TEST_DIR/mock-bin"
+mkdir -p "$MOCK_BIN"
+cat > "$MOCK_BIN/copilot" << 'MOCK_EOF'
+#!/bin/bash
+# No-op mock copilot — we only care about stderr from run_diff_review
+echo "mock review output"
+exit 0
+MOCK_EOF
+chmod +x "$MOCK_BIN/copilot"
+
+stderr_out=""
+exit_code=0
+# base_ref is HEAD~1, diff will be the big file addition
+stderr_out=$(PATH="$MOCK_BIN:$PATH" \
+    CLAUDE_PLUGIN_ROOT="$TEST_DIR/no-plugin" \
+    run_diff_review "HEAD~1" "gpt-5.4" "high" "$LARGE_DIFF_PROJECT" 30 "copilot" 2>&1 >/dev/null) || exit_code=$?
+
+if echo "$stderr_out" | grep -q "truncating to"; then
+    pass "run_diff_review: large diff (>64KB) triggers truncation warning"
+else
+    fail "run_diff_review: large diff (>64KB) triggers truncation warning" "stderr contains 'truncating to'" "exit=$exit_code, stderr=$stderr_out"
+fi
+
+# ========================================
+# Test 28: run_diff_review does NOT truncate normal diffs
+# ========================================
+echo ""
+echo "--- Test 28: run_diff_review does NOT truncate normal diffs ---"
+echo ""
+
+setup_test_dir
+SMALL_DIFF_PROJECT="$TEST_DIR/small-diff-project"
+init_test_git_repo "$SMALL_DIFF_PROJECT"
+
+# Create a small file and commit it
+echo "small change" > "$SMALL_DIFF_PROJECT/small.txt"
+(cd "$SMALL_DIFF_PROJECT" && git add small.txt && git commit -q -m "Add small file")
+
+MOCK_BIN="$TEST_DIR/mock-bin-small"
+mkdir -p "$MOCK_BIN"
+cat > "$MOCK_BIN/copilot" << 'MOCK_EOF'
+#!/bin/bash
+echo "mock review output"
+exit 0
+MOCK_EOF
+chmod +x "$MOCK_BIN/copilot"
+
+stderr_out=""
+exit_code=0
+stderr_out=$(PATH="$MOCK_BIN:$PATH" \
+    CLAUDE_PLUGIN_ROOT="$TEST_DIR/no-plugin" \
+    run_diff_review "HEAD~1" "gpt-5.4" "high" "$SMALL_DIFF_PROJECT" 30 "copilot" 2>&1 >/dev/null) || exit_code=$?
+
+if echo "$stderr_out" | grep -q "truncating"; then
+    fail "run_diff_review: normal diff does NOT truncate" "no truncation warning" "stderr=$stderr_out"
+else
+    pass "run_diff_review: normal diff does NOT truncate"
+fi
+
+# ========================================
 # Summary
 # ========================================
 
