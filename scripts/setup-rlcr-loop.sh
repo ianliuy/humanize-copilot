@@ -295,9 +295,12 @@ PROJECT_ROOT="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 MISSING_DEPS=()
 
 REVIEW_CLI="$(detect_review_cli)" || {
-    echo "Error: Neither 'copilot' nor 'codex' CLI found in PATH." >&2
-    echo "  Install Copilot CLI: https://docs.github.com/en/copilot" >&2
-    echo "  Or install Codex CLI: https://github.com/openai/codex" >&2
+    preferred="${HUMANIZE_PREFERRED_CLI:-${DEFAULT_PREFERRED_CLI:-auto}}"
+    if [[ "$preferred" == "auto" ]]; then
+        echo "Please install Copilot CLI or Codex CLI:" >&2
+        echo "  Copilot: https://docs.github.com/en/copilot" >&2
+        echo "  Codex:   https://github.com/openai/codex" >&2
+    fi
     exit 1
 }
 echo "Review CLI: $REVIEW_CLI" >&2
@@ -740,23 +743,42 @@ if [[ -n "$BASE_BRANCH" ]]; then
     fi
 else
     # Auto-detect base branch
-    # Note: codex review --base requires a LOCAL branch, so we must verify local existence
-    # Priority 1: Remote default branch (if it exists locally)
+    # codex review --base requires a LOCAL branch; copilot prompt-based review accepts any resolvable ref
+    # Priority 1: Remote default branch (if it exists locally, or remotely for copilot)
     # Guard with || true to prevent pipefail from terminating script when origin is missing
     REMOTE_DEFAULT=$(run_with_timeout "$GIT_TIMEOUT" git -C "$PROJECT_ROOT" remote show origin 2>/dev/null | grep "HEAD branch:" | sed 's/.*HEAD branch:[[:space:]]*//' || true)
     if [[ -n "$REMOTE_DEFAULT" && "$REMOTE_DEFAULT" != "(unknown)" ]]; then
         # Verify the remote default branch exists locally
         if run_with_timeout "$GIT_TIMEOUT" git -C "$PROJECT_ROOT" show-ref --verify --quiet "refs/heads/$REMOTE_DEFAULT" 2>/dev/null; then
             BASE_BRANCH="$REMOTE_DEFAULT"
+        elif [[ "$REVIEW_CLI" == "copilot" ]]; then
+            # copilot: accept remote-only ref if it resolves via git rev-parse
+            if git -C "$PROJECT_ROOT" rev-parse --verify "origin/$REMOTE_DEFAULT" &>/dev/null; then
+                BASE_COMMIT=$(git -C "$PROJECT_ROOT" rev-parse "origin/$REMOTE_DEFAULT")
+                BASE_BRANCH="origin/$REMOTE_DEFAULT"
+                echo "Using remote ref '$BASE_BRANCH' (no local branch needed for copilot)" >&2
+            fi
         fi
     fi
     # Priority 2: Local main branch (if not already set)
     if [[ -z "$BASE_BRANCH" ]] && run_with_timeout "$GIT_TIMEOUT" git -C "$PROJECT_ROOT" show-ref --verify --quiet refs/heads/main 2>/dev/null; then
         BASE_BRANCH="main"
     fi
+    # Priority 2b (copilot only): Remote origin/main (if no local main)
+    if [[ -z "$BASE_BRANCH" && "$REVIEW_CLI" == "copilot" ]] && git -C "$PROJECT_ROOT" rev-parse --verify "origin/main" &>/dev/null; then
+        BASE_COMMIT=$(git -C "$PROJECT_ROOT" rev-parse "origin/main")
+        BASE_BRANCH="origin/main"
+        echo "Using remote ref '$BASE_BRANCH' (no local branch needed for copilot)" >&2
+    fi
     # Priority 3: Local master branch (if not already set)
     if [[ -z "$BASE_BRANCH" ]] && run_with_timeout "$GIT_TIMEOUT" git -C "$PROJECT_ROOT" show-ref --verify --quiet refs/heads/master 2>/dev/null; then
         BASE_BRANCH="master"
+    fi
+    # Priority 3b (copilot only): Remote origin/master (if no local master)
+    if [[ -z "$BASE_BRANCH" && "$REVIEW_CLI" == "copilot" ]] && git -C "$PROJECT_ROOT" rev-parse --verify "origin/master" &>/dev/null; then
+        BASE_COMMIT=$(git -C "$PROJECT_ROOT" rev-parse "origin/master")
+        BASE_BRANCH="origin/master"
+        echo "Using remote ref '$BASE_BRANCH' (no local branch needed for copilot)" >&2
     fi
     # Error if no base branch found
     if [[ -z "$BASE_BRANCH" ]]; then
@@ -764,7 +786,9 @@ else
         echo "  No local main or master branch found" >&2
         if [[ -n "$REMOTE_DEFAULT" && "$REMOTE_DEFAULT" != "(unknown)" ]]; then
             echo "  Remote default '$REMOTE_DEFAULT' exists but not locally" >&2
-            echo "  Run: git fetch origin $REMOTE_DEFAULT:$REMOTE_DEFAULT" >&2
+            if [[ "$REVIEW_CLI" == "codex" ]]; then
+                echo "  Run: git fetch origin $REMOTE_DEFAULT:$REMOTE_DEFAULT" >&2
+            fi
         fi
         echo "  Use --base-branch to specify explicitly" >&2
         exit 1
@@ -779,10 +803,12 @@ if [[ "$BASE_BRANCH" == *[:\#\"\'\`]* ]] || [[ "$BASE_BRANCH" =~ $'\n' ]]; then
     exit 1
 fi
 
-# Capture the base commit SHA at loop start time
+# Capture the base commit SHA at loop start time (if not already set by remote ref detection)
 # This prevents issues when working on the base branch itself (e.g., main)
 # where the branch ref advances with commits, making diff against itself empty
-BASE_COMMIT=$(run_with_timeout "$GIT_TIMEOUT" git -C "$PROJECT_ROOT" rev-parse "$BASE_BRANCH" 2>/dev/null)
+if [[ -z "${BASE_COMMIT:-}" ]]; then
+    BASE_COMMIT=$(run_with_timeout "$GIT_TIMEOUT" git -C "$PROJECT_ROOT" rev-parse "$BASE_BRANCH" 2>/dev/null)
+fi
 if [[ -z "$BASE_COMMIT" ]]; then
     echo "Error: Failed to get commit SHA for base branch: $BASE_BRANCH" >&2
     exit 1

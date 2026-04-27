@@ -166,7 +166,10 @@ SELECTOR_TIMEOUT=120
 
 CODEX_EXIT_CODE=0
 if [[ "$BITLESSON_PROVIDER" == "codex" ]]; then
-    review_cli="$(detect_review_cli 2>/dev/null)" || review_cli="codex"
+    review_cli="$(detect_review_cli)" || {
+        echo "Error: No review CLI available for BitLesson selection" >&2
+        exit 1
+    }
 
     RAW_OUTPUT="$(run_prompt_exec "$PROMPT" "$BITLESSON_MODEL" "high" "$CODEX_PROJECT_ROOT" "$SELECTOR_TIMEOUT" "$review_cli")" || CODEX_EXIT_CODE=$?
 elif [[ "$BITLESSON_PROVIDER" == "claude" ]]; then

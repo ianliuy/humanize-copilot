@@ -270,9 +270,12 @@ fi
 
 # Check if a review CLI (copilot or codex) is available
 REVIEW_CLI="$(detect_review_cli)" || {
-    echo "Error: Neither 'copilot' nor 'codex' CLI found in PATH." >&2
-    echo "  Install Copilot CLI: https://docs.github.com/en/copilot" >&2
-    echo "  Or install Codex CLI: https://github.com/openai/codex" >&2
+    preferred="${HUMANIZE_PREFERRED_CLI:-${DEFAULT_PREFERRED_CLI:-auto}}"
+    if [[ "$preferred" == "auto" ]]; then
+        echo "Please install Copilot CLI or Codex CLI:" >&2
+        echo "  Copilot: https://docs.github.com/en/copilot" >&2
+        echo "  Codex:   https://github.com/openai/codex" >&2
+    fi
     exit 1
 }
 echo "Review CLI: $REVIEW_CLI" >&2

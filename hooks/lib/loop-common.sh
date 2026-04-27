@@ -278,6 +278,11 @@ run_prompt_exec() {
 
     case "$cli" in
         copilot)
+            # Guard against oversized prompts on platforms with argv limits
+            local prompt_size=${#prompt}
+            if [[ $prompt_size -gt 65536 ]]; then
+                echo "Warning: Prompt is $prompt_size bytes, may exceed platform limits." >&2
+            fi
             run_with_timeout "$timeout" copilot -p "$prompt" --model "$model" -s --allow-all
             ;;
         codex)
@@ -326,12 +331,12 @@ run_diff_review() {
             fi
             # Truncate large diffs to avoid argv-length failures
             local diff_size=${#diff_content}
-            local max_diff_bytes=65536  # 64KB limit for prompt argument safety
+            local max_diff_bytes=32768  # 32KB - safe for command-line across platforms
             if [[ $diff_size -gt $max_diff_bytes ]]; then
-                echo "Warning: Diff is $diff_size bytes, truncating to ${max_diff_bytes} bytes for review." >&2
+                echo "Warning: Diff is $diff_size bytes, truncating to ${max_diff_bytes} bytes for review safety." >&2
                 diff_content="${diff_content:0:$max_diff_bytes}
 
-[... diff truncated at ${max_diff_bytes} bytes. Review covers the first portion of changes only.]"
+[... diff truncated at ${max_diff_bytes} bytes out of ${diff_size}. Review covers the first portion of changes only.]"
             fi
             local template_file="${CLAUDE_PLUGIN_ROOT:-}/prompt-template/codex/diff-review-prompt.md"
             local prompt
