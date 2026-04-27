@@ -121,6 +121,8 @@ TEST_SUITES=(
     "robustness/test-pr-loop-api-poll.sh"
     "test-windows-launcher-shims.sh"
     "test-auto-commands.sh"
+    # Review CLI integration tests
+    "test-review-cli-integration.sh"
 )
 
 # Tests that must be run with zsh (not bash)
