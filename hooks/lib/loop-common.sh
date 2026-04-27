@@ -324,10 +324,14 @@ run_diff_review() {
                 echo "No changes detected between $base_ref and HEAD" >&2
                 return 1
             fi
-            # Check diff size - warn if very large (>100KB)
+            # Truncate large diffs to avoid argv-length failures
             local diff_size=${#diff_content}
-            if [[ $diff_size -gt 102400 ]]; then
-                echo "Warning: Large diff ($diff_size bytes). Review may be truncated." >&2
+            local max_diff_bytes=65536  # 64KB limit for prompt argument safety
+            if [[ $diff_size -gt $max_diff_bytes ]]; then
+                echo "Warning: Diff is $diff_size bytes, truncating to ${max_diff_bytes} bytes for review." >&2
+                diff_content="${diff_content:0:$max_diff_bytes}
+
+[... diff truncated at ${max_diff_bytes} bytes. Review covers the first portion of changes only.]"
             fi
             local template_file="${CLAUDE_PLUGIN_ROOT:-}/prompt-template/codex/diff-review-prompt.md"
             local prompt

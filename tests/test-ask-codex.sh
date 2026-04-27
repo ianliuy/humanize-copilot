@@ -474,10 +474,10 @@ COPILOT_STDOUT=$(cd "$COPILOT_PROJECT" && \
     bash "$ASK_CODEX_SCRIPT" "copilot test" 2>"$TEST_DIR/copilot-stderr.txt") || EXIT_CODE=$?
 COPILOT_STDERR="$(cat "$TEST_DIR/copilot-stderr.txt" 2>/dev/null)"
 
-if [[ $EXIT_CODE -eq 0 ]] && echo "$COPILOT_STDERR" | grep -q "cli=copilot"; then
+if [[ $EXIT_CODE -eq 0 ]] && echo "$COPILOT_STDERR" | grep -q "using copilot backend"; then
     pass "CLI selection: only copilot on PATH uses copilot backend"
 else
-    fail "CLI selection: only copilot on PATH uses copilot backend" "exit 0 + cli=copilot in stderr" "exit=$EXIT_CODE, stderr=$COPILOT_STDERR"
+    fail "CLI selection: only copilot on PATH uses copilot backend" "exit 0 + 'using copilot backend' in stderr" "exit=$EXIT_CODE, stderr=$COPILOT_STDERR"
 fi
 
 # Test: when both mock copilot and mock codex on PATH, uses copilot
@@ -497,10 +497,10 @@ cd "$COPILOT_PROJECT" && \
     bash "$ASK_CODEX_SCRIPT" "both test" >/dev/null 2>"$TEST_DIR/both-stderr.txt" || EXIT_CODE=$?
 BOTH_STDERR="$(cat "$TEST_DIR/both-stderr.txt" 2>/dev/null)"
 
-if echo "$BOTH_STDERR" | grep -q "cli=copilot"; then
+if echo "$BOTH_STDERR" | grep -q "using copilot backend"; then
     pass "CLI selection: both on PATH uses copilot backend"
 else
-    fail "CLI selection: both on PATH uses copilot backend" "cli=copilot in stderr" "stderr=$BOTH_STDERR"
+    fail "CLI selection: both on PATH uses copilot backend" "'using copilot backend' in stderr" "stderr=$BOTH_STDERR"
 fi
 
 # Test: when only mock codex on PATH, uses codex (existing behavior)
@@ -515,10 +515,10 @@ cd "$COPILOT_PROJECT" && \
     bash "$ASK_CODEX_SCRIPT" "codex test" >/dev/null 2>"$TEST_DIR/codex-stderr.txt" || EXIT_CODE=$?
 CODEX_STDERR="$(cat "$TEST_DIR/codex-stderr.txt" 2>/dev/null)"
 
-if echo "$CODEX_STDERR" | grep -q "cli=codex"; then
+if echo "$CODEX_STDERR" | grep -q "using codex backend"; then
     pass "CLI selection: only codex on PATH uses codex backend"
 else
-    fail "CLI selection: only codex on PATH uses codex backend" "cli=codex in stderr" "stderr=$CODEX_STDERR"
+    fail "CLI selection: only codex on PATH uses codex backend" "'using codex backend' in stderr" "stderr=$CODEX_STDERR"
 fi
 
 # ========================================
