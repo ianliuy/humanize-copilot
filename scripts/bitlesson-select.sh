@@ -93,10 +93,15 @@ BITLESSON_PROVIDER="$(detect_provider "$BITLESSON_MODEL")"
 # ========================================
 
 if ! check_provider_dependency "$BITLESSON_PROVIDER" 2>/dev/null; then
-    # Fall back to codex provider when the configured provider binary is missing
+    # Primary provider not available — fall back to codex-family via detect_review_cli
+    # This handles copilot-only environments where codex is not installed
     BITLESSON_MODEL="$DEFAULT_CODEX_MODEL"
     BITLESSON_PROVIDER="codex"
-    check_provider_dependency "$BITLESSON_PROVIDER"
+    if ! detect_review_cli >/dev/null 2>&1; then
+        echo "Error: No review CLI available for BitLesson selection." >&2
+        echo "  Install Copilot CLI or Codex CLI." >&2
+        exit 1
+    fi
 fi
 
 if [[ ! -f "$BITLESSON_FILE" ]]; then
