@@ -124,6 +124,7 @@ source "$PROJECT_ROOT/scripts/portable-timeout.sh" 2>/dev/null || true
 # Test 1: parse_state_file extracts review_cli=copilot
 # ----------------------------------------
 echo "Test 1: parse_state_file extracts review_cli=copilot from state.md"
+reset_call_log "$TEST_DIR/t1"
 STATE_FILE_1=$(create_test_state "$TEST_DIR/t1" "copilot")
 
 parse_state_file "$STATE_FILE_1"
