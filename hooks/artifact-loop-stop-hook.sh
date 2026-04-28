@@ -26,30 +26,41 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/loop-common.sh"
 
 # ========================================
-# Find Active Artifact Loop
+# Find Active Artifact Loop (session-aware)
 # ========================================
 
 PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 ARTIFACT_LOOP_BASE="$PROJECT_ROOT/.humanize/artifact-loop"
 
+# Read hook input from stdin and extract session ID
+HOOK_INPUT=""
+HOOK_SESSION_ID=""
+if [[ ! -t 0 ]]; then
+    HOOK_INPUT=$(cat)
+    if [[ -n "$HOOK_INPUT" ]] && command -v jq &>/dev/null; then
+        HOOK_SESSION_ID=$(echo "$HOOK_INPUT" | jq -r '.session_id // empty' 2>/dev/null) || true
+    fi
+fi
+
 LOOP_DIR=""
 STATE_FILE=""
 IN_FINALIZE="false"
 
+# Use shared find_active_loop for session-filtered resolution
 if [[ -d "$ARTIFACT_LOOP_BASE" ]]; then
-    for dir in "$ARTIFACT_LOOP_BASE"/*/; do
-        [[ -d "$dir" ]] || continue
-        if [[ -f "$dir/state.md" ]]; then
-            LOOP_DIR="${dir%/}"
-            STATE_FILE="$LOOP_DIR/state.md"
-            break
-        elif [[ -f "$dir/finalize-state.md" ]]; then
-            LOOP_DIR="${dir%/}"
-            STATE_FILE="$LOOP_DIR/finalize-state.md"
-            IN_FINALIZE="true"
-            break
-        fi
-    done
+    LOOP_DIR=$(find_active_loop "$ARTIFACT_LOOP_BASE" "$HOOK_SESSION_ID") || true
+fi
+
+if [[ -n "$LOOP_DIR" ]]; then
+    # Determine state file and finalize status
+    if [[ -f "$LOOP_DIR/finalize-state.md" ]]; then
+        STATE_FILE="$LOOP_DIR/finalize-state.md"
+        IN_FINALIZE="true"
+    elif [[ -f "$LOOP_DIR/state.md" ]]; then
+        STATE_FILE="$LOOP_DIR/state.md"
+    else
+        LOOP_DIR=""
+    fi
 fi
 
 # No active artifact loop — exit silently (allow other hooks to run)
@@ -83,9 +94,11 @@ mkdir -p "$CACHE_DIR"
 
 # ========================================
 # Finalize Phase Handler (MUST run before normal review)
-# Per AC-1: finalize rounds never run summary check,
-# max-iterations, or normal Codex review.
+# Finalize rounds skip summary check, max-iterations,
+# and normal Codex review — go directly to validation.
 # ========================================
+
+GOAL_TRACKER_FILE="$LOOP_DIR/goal-tracker.md"
 
 if [[ "$IN_FINALIZE" == "true" ]]; then
     FINALIZE_SUMMARY="$LOOP_DIR/finalize-summary.md"
@@ -102,7 +115,7 @@ if [[ "$IN_FINALIZE" == "true" ]]; then
     if [[ -f "$FINALIZE_TEMPLATE" ]]; then
         VALIDATOR_PROMPT=$(cat "$FINALIZE_TEMPLATE")
         VALIDATOR_PROMPT="${VALIDATOR_PROMPT//\{\{PLAN_FILE\}\}/$PLAN_FILE}"
-        VALIDATOR_PROMPT="${VALIDATOR_PROMPT//\{\{GOAL_TRACKER_FILE\}\}/$GOAL_DIR/goal-tracker.md}"
+        VALIDATOR_PROMPT="${VALIDATOR_PROMPT//\{\{GOAL_TRACKER_FILE\}\}/$GOAL_TRACKER_FILE}"
         VALIDATOR_PROMPT="${VALIDATOR_PROMPT//\{\{FINALIZE_SUMMARY_FILE\}\}/$FINALIZE_SUMMARY}"
 
         # Append finalize summary using safe substitution
@@ -118,9 +131,12 @@ ${FINALIZE_CONTENT}
 
         echo "Running deliverable validation review..." >&2
         REVIEW_CLI="${STATE_REVIEW_CLI:-codex}"
-        if ! run_prompt_exec "$VALIDATOR_PROMPT" "$VALIDATOR_LOG" \
-            "$CODEX_MODEL" "$CODEX_EFFORT" "$CODEX_TIMEOUT" "$REVIEW_CLI"; then
-            echo "Warning: Deliverable validator CLI returned non-zero" >&2
+        REVIEW_EXIT=0
+        run_prompt_exec "$VALIDATOR_PROMPT" "$CODEX_MODEL" "$CODEX_EFFORT" \
+            "$PROJECT_ROOT" "$CODEX_TIMEOUT" "$REVIEW_CLI" \
+            > "$VALIDATOR_LOG" 2>&1 || REVIEW_EXIT=$?
+        if [[ $REVIEW_EXIT -ne 0 ]]; then
+            echo "Warning: Deliverable validator CLI returned exit $REVIEW_EXIT" >&2
         fi
 
         if [[ -f "$VALIDATOR_LOG" && -s "$VALIDATOR_LOG" ]]; then
@@ -199,7 +215,6 @@ fi
 
 SUMMARY_CONTENT=$(cat "$SUMMARY_FILE")
 REVIEW_RESULT_FILE="$LOOP_DIR/round-${CURRENT_ROUND}-review-result.md"
-GOAL_TRACKER_FILE="$LOOP_DIR/goal-tracker.md"
 
 # Determine review type (full alignment at configured intervals)
 FULL_ALIGNMENT_CHECK="false"
@@ -270,9 +285,20 @@ echo "Running Codex summary review for artifact loop (round $CURRENT_ROUND)..." 
 # Run review through shared CLI helper
 CODEX_LOG="$CACHE_DIR/round-${CURRENT_ROUND}-codex-review.log"
 REVIEW_CLI="${STATE_REVIEW_CLI:-codex}"
-if ! run_prompt_exec "$REVIEW_PROMPT" "$CODEX_LOG" \
-    "$CODEX_MODEL" "$CODEX_EFFORT" "$CODEX_TIMEOUT" "$REVIEW_CLI"; then
-    echo "Warning: Review CLI returned non-zero exit" >&2
+REVIEW_EXIT=0
+run_prompt_exec "$REVIEW_PROMPT" "$CODEX_MODEL" "$CODEX_EFFORT" \
+    "$PROJECT_ROOT" "$CODEX_TIMEOUT" "$REVIEW_CLI" \
+    > "$CODEX_LOG" 2>&1 || REVIEW_EXIT=$?
+if [[ $REVIEW_EXIT -ne 0 ]]; then
+    echo "Warning: Review CLI returned exit $REVIEW_EXIT" >&2
+fi
+if [[ ! -f "$CODEX_LOG" || ! -s "$CODEX_LOG" ]]; then
+    echo "Error: Review CLI produced no output (exit $REVIEW_EXIT)" >&2
+    jq -n \
+        --arg reason "Review CLI failed with exit $REVIEW_EXIT and produced no output." \
+        --arg msg "Check $CODEX_LOG for details. Retry the stop gate." \
+        '{"decision": "block", "reason": $reason, "systemMessage": $msg}'
+    exit 0
 fi
 
 # ========================================

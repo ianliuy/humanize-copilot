@@ -192,6 +192,23 @@ fi
 CLAUDE_PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 load_merged_config "$CLAUDE_PLUGIN_ROOT" "$PROJECT_ROOT" 2>/dev/null || true
 
+# Detect review CLI backend (frozen at setup time per BL-20260427-frozen-state-backend)
+REVIEW_CLI=""
+if type -t detect_review_cli &>/dev/null; then
+    REVIEW_CLI=$(detect_review_cli)
+else
+    # Inline fallback
+    if command -v codex &>/dev/null; then
+        REVIEW_CLI="codex"
+    elif command -v copilot &>/dev/null; then
+        REVIEW_CLI="copilot"
+    fi
+fi
+if [[ -z "$REVIEW_CLI" ]]; then
+    echo "Error: No review CLI (codex or copilot) found. Install one before starting." >&2
+    exit 1
+fi
+
 # ========================================
 # Create Loop Directory
 # ========================================
@@ -243,6 +260,7 @@ max_iterations: $MAX_ITERATIONS
 codex_model: $CODEX_MODEL
 codex_effort: $CODEX_EFFORT
 codex_timeout: $CODEX_TIMEOUT
+review_cli: $REVIEW_CLI
 push_every_round: false
 full_review_round: $FULL_REVIEW_ROUND
 plan_file: $PLAN_FILE
@@ -256,6 +274,13 @@ bitlesson_allow_empty_none: true
 started_at: $(date -u +%Y-%m-%dT%H:%M:%SZ)
 ---
 EOF
+
+# Create pending-session-id signal for post-bash-hook to populate
+# Mirrors the RLCR pattern at setup-rlcr-loop.sh
+PENDING_SESSION_FILE="$PROJECT_ROOT/.humanize/.pending-session-id"
+mkdir -p "$(dirname "$PENDING_SESSION_FILE")"
+echo "$LOOP_DIR/state.md" > "$PENDING_SESSION_FILE"
+echo "$CLAUDE_PLUGIN_ROOT/scripts/setup-artifact-loop.sh" >> "$PENDING_SESSION_FILE"
 
 # ========================================
 # Copy Plan File
