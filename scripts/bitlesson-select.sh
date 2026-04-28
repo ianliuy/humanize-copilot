@@ -187,8 +187,8 @@ if [[ "$BITLESSON_PROVIDER" == "codex" ]]; then
 
     RAW_OUTPUT="$(run_prompt_exec "$PROMPT" "$BITLESSON_MODEL" "high" "$CODEX_PROJECT_ROOT" "$SELECTOR_TIMEOUT" "$review_cli")" || CODEX_EXIT_CODE=$?
 
-    # Normalize copilot output if needed
-    if [[ "$review_cli" == "copilot" && -n "$RAW_OUTPUT" ]]; then
+    # Extract sentinel-wrapped content (prompts include sentinel instructions for all backends)
+    if [[ -n "$RAW_OUTPUT" ]]; then
         RAW_OUTPUT="$(extract_final_answer "$RAW_OUTPUT")"
     fi
 elif [[ "$BITLESSON_PROVIDER" == "claude" ]]; then

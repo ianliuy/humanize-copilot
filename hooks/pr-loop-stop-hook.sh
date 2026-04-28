@@ -1338,8 +1338,9 @@ CODEX_EXIT_CODE=0
 run_prompt_exec "$CODEX_PROMPT_CONTENT" "$PR_CODEX_MODEL" "$PR_CODEX_EFFORT" "$PROJECT_ROOT" "$PR_CODEX_TIMEOUT" "$REVIEW_CLI" \
     > "$CHECK_FILE" 2>/dev/null || CODEX_EXIT_CODE=$?
 
-# Save raw output for debugging, then normalize for copilot backend
-if [[ "$REVIEW_CLI" == "copilot" && -s "$CHECK_FILE" ]]; then
+# Save raw output and extract sentinel-wrapped content
+# All prompt templates now include sentinel instructions for both backends
+if [[ -s "$CHECK_FILE" ]]; then
     cp "$CHECK_FILE" "${CHECK_FILE}.raw"
     extract_final_answer < "$CHECK_FILE" > "${CHECK_FILE}.tmp"
     mv "${CHECK_FILE}.tmp" "$CHECK_FILE"

@@ -279,12 +279,12 @@ run_prompt_exec() {
     case "$cli" in
         copilot)
             # Note: effort parameter is not used for copilot (not supported by copilot CLI)
-            # Enforce prompt size ceiling for Copilot -p argument (safe for all platforms)
-            : "${COPILOT_PROMPT_CEILING:=16384}"
+            # Warn if prompt is very large but DO NOT truncate — truncation can
+            # cut off sentinel instructions at the end of template prompts.
+            # Size-sensitive paths (diff review) have their own budget in run_diff_review.
             local prompt_size=${#prompt}
-            if [[ $prompt_size -gt $COPILOT_PROMPT_CEILING ]]; then
-                echo "Warning: Prompt is $prompt_size bytes, truncating to $COPILOT_PROMPT_CEILING for platform safety." >&2
-                prompt="${prompt:0:$COPILOT_PROMPT_CEILING}"
+            if [[ $prompt_size -gt 65536 ]]; then
+                echo "Warning: Copilot prompt is $prompt_size bytes, may be slow." >&2
             fi
             (cd "$project_root" && run_with_timeout "$timeout" copilot -p "$prompt" --model "$model" --allow-all)
             ;;

@@ -1054,8 +1054,9 @@ Provider: codex
     run_diff_review "$review_base" "$CODEX_REVIEW_MODEL" "$CODEX_REVIEW_EFFORT" "$PROJECT_ROOT" "$CODEX_TIMEOUT" "$REVIEW_CLI" \
         > "$CODEX_REVIEW_LOG_FILE" 2>&1 || CODEX_REVIEW_EXIT_CODE=$?
 
-    # Save raw output for debugging, then normalize for copilot backend
-    if [[ "$REVIEW_CLI" == "copilot" && -s "$CODEX_REVIEW_LOG_FILE" ]]; then
+    # Save raw output and extract sentinel-wrapped content
+    # All prompt templates now include sentinel instructions for both backends
+    if [[ -s "$CODEX_REVIEW_LOG_FILE" ]]; then
         cp "$CODEX_REVIEW_LOG_FILE" "${CODEX_REVIEW_LOG_FILE}.raw"
         extract_final_answer < "$CODEX_REVIEW_LOG_FILE" > "${CODEX_REVIEW_LOG_FILE}.tmp"
         mv "${CODEX_REVIEW_LOG_FILE}.tmp" "$CODEX_REVIEW_LOG_FILE"
@@ -1396,8 +1397,9 @@ CODEX_EXIT_CODE=0
 run_prompt_exec "$CODEX_PROMPT_CONTENT" "$CODEX_EXEC_MODEL" "$CODEX_EXEC_EFFORT" "$PROJECT_ROOT" "$CODEX_TIMEOUT" "$REVIEW_CLI" \
     > "$CODEX_STDOUT_FILE" 2> "$CODEX_STDERR_FILE" || CODEX_EXIT_CODE=$?
 
-# Save raw output for debugging, then normalize for copilot backend
-if [[ "$REVIEW_CLI" == "copilot" && -s "$CODEX_STDOUT_FILE" ]]; then
+# Save raw output and extract sentinel-wrapped content
+# All prompt templates now include sentinel instructions for both backends
+if [[ -s "$CODEX_STDOUT_FILE" ]]; then
     cp "$CODEX_STDOUT_FILE" "${CODEX_STDOUT_FILE}.raw"
     extract_final_answer < "$CODEX_STDOUT_FILE" > "${CODEX_STDOUT_FILE}.tmp"
     mv "${CODEX_STDOUT_FILE}.tmp" "$CODEX_STDOUT_FILE"
