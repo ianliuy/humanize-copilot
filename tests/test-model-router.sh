@@ -833,8 +833,8 @@ PATH="$MOCK_BIN:$PATH" \
 
 if [[ -f "$CAPTURE_FILE" ]]; then
     captured_len=$(cat "$CAPTURE_FILE")
-    # Use the same ceiling constant from loop-common.sh (default 32768)
-    : "${COPILOT_PROMPT_CEILING:=32768}"
+    # Use the same ceiling constant from loop-common.sh (default 16384)
+    : "${COPILOT_PROMPT_CEILING:=16384}"
     if [[ $captured_len -le $COPILOT_PROMPT_CEILING ]]; then
         pass "run_diff_review: copilot -p argument is bounded ($captured_len bytes ≤ $COPILOT_PROMPT_CEILING)"
     else

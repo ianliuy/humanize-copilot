@@ -319,7 +319,7 @@ run_diff_review() {
     local extra_args=("$@")
 
     # Maximum total prompt size for Copilot -p argument (safe for all platforms including Windows)
-    : "${COPILOT_PROMPT_CEILING:=32768}"
+    : "${COPILOT_PROMPT_CEILING:=16384}"
 
     case "$cli" in
         copilot)
@@ -382,7 +382,9 @@ ${truncation_marker}"
             fi
 
             # Substitute diff into template
-            local prompt="${template//\{\{DIFF_CONTENT\}\}/$diff_content}"
+            local before_marker="${template%%\{\{DIFF_CONTENT\}\}*}"
+            local after_marker="${template#*\{\{DIFF_CONTENT\}\}}"
+            local prompt="${before_marker}${diff_content}${after_marker}"
             local _raw_output
             _raw_output="$(cd "$project_root" && run_with_timeout "$timeout" copilot -p "$prompt" --model "$model" --allow-all)"
             local rc=$?

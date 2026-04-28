@@ -1332,22 +1332,6 @@ Or use \`/humanize:cancel-pr-loop\` to cancel the loop."
 fi
 echo "Review CLI: $REVIEW_CLI (frozen from state)" >&2
 
-# Run Codex
-CODEX_ARGS=("-m" "$PR_CODEX_MODEL")
-if [[ -n "$PR_CODEX_EFFORT" ]]; then
-    CODEX_ARGS+=("-c" "model_reasoning_effort=${PR_CODEX_EFFORT}")
-fi
-
-# Determine automation flag based on environment variable
-# Default: Use --full-auto (safe mode with sandbox)
-# If HUMANIZE_CODEX_BYPASS_SANDBOX is "true" or "1": Use --dangerously-bypass-approvals-and-sandbox
-CODEX_AUTO_FLAG="--full-auto"
-if [[ "${HUMANIZE_CODEX_BYPASS_SANDBOX:-}" == "true" ]] || [[ "${HUMANIZE_CODEX_BYPASS_SANDBOX:-}" == "1" ]]; then
-    CODEX_AUTO_FLAG="--dangerously-bypass-approvals-and-sandbox"
-fi
-
-CODEX_ARGS+=("$CODEX_AUTO_FLAG" "-C" "$PROJECT_ROOT")
-
 CODEX_PROMPT_CONTENT=$(cat "$CODEX_PROMPT_FILE")
 CODEX_EXIT_CODE=0
 
@@ -1362,25 +1346,25 @@ if [[ "$REVIEW_CLI" == "copilot" && -s "$CHECK_FILE" ]]; then
 fi
 
 if [[ $CODEX_EXIT_CODE -ne 0 ]]; then
-    REASON="# Codex Review Failed
+    REASON="# Review Failed
 
-Codex failed to validate bot reviews (exit code: $CODEX_EXIT_CODE).
+$REVIEW_CLI failed to validate bot reviews (exit code: $CODEX_EXIT_CODE).
 
 Please retry or cancel the loop."
 
-    jq -n --arg reason "$REASON" --arg msg "PR Loop: Codex review failed" \
+    jq -n --arg reason "$REASON" --arg msg "PR Loop: $REVIEW_CLI review failed" \
         '{"decision": "block", "reason": $reason, "systemMessage": $msg}'
     exit 0
 fi
 
 if [[ ! -s "$CHECK_FILE" ]]; then
-    REASON="# Codex Review Empty
+    REASON="# Review Empty
 
-Codex produced no output when validating bot reviews.
+$REVIEW_CLI produced no output when validating bot reviews.
 
 Please retry or cancel the loop."
 
-    jq -n --arg reason "$REASON" --arg msg "PR Loop: Codex review empty" \
+    jq -n --arg reason "$REASON" --arg msg "PR Loop: $REVIEW_CLI review empty" \
         '{"decision": "block", "reason": $reason, "systemMessage": $msg}'
     exit 0
 fi
