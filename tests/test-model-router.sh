@@ -844,6 +844,192 @@ else
     fail "run_diff_review: copilot -p argument is bounded" "capture file exists" "capture file not created (exit=$exit_code)"
 fi
 
+# ==========================================
+# Task 12: extract_final_answer() tests
+# ==========================================
+
+# ========================================
+# Test 35: extract_final_answer with valid sentinels
+# ========================================
+echo ""
+echo "--- Test 35: extract_final_answer with valid sentinels ---"
+echo ""
+
+input="Some thinking output
+More tool calls
+HUMANIZE_ANSWER_BEGIN
+This is the clean answer.
+It has multiple lines.
+HUMANIZE_ANSWER_END
+Some trailing noise"
+result="$(extract_final_answer "$input")"
+
+if [[ "$result" == *"This is the clean answer."* ]] && [[ "$result" == *"multiple lines"* ]] && [[ "$result" != *"thinking output"* ]]; then
+    pass "extract_final_answer: valid sentinels extract clean answer"
+else
+    fail "extract_final_answer: valid sentinels extract clean answer" "clean answer without noise" "result=$result"
+fi
+
+# ========================================
+# Test 36: extract_final_answer with missing sentinels (fallback)
+# ========================================
+echo ""
+echo "--- Test 36: extract_final_answer with missing sentinels (fallback) ---"
+echo ""
+
+input="Just some plain output without markers"
+result="$(extract_final_answer "$input" 2>/dev/null)"
+
+if [[ "$result" == "$input" ]]; then
+    pass "extract_final_answer: missing sentinels falls back to raw input"
+else
+    fail "extract_final_answer: missing sentinels falls back to raw input" "$input" "$result"
+fi
+
+# ========================================
+# Test 37: extract_final_answer with empty input
+# ========================================
+echo ""
+echo "--- Test 37: extract_final_answer with empty input ---"
+echo ""
+
+result="$(extract_final_answer "" 2>/dev/null)"
+
+if [[ -z "$result" ]]; then
+    pass "extract_final_answer: empty input returns empty"
+else
+    fail "extract_final_answer: empty input returns empty" "(empty)" "$result"
+fi
+
+# ========================================
+# Test 38: extract_final_answer with CRLF input
+# ========================================
+echo ""
+echo "--- Test 38: extract_final_answer with CRLF input ---"
+echo ""
+
+input=$'HUMANIZE_ANSWER_BEGIN\r\nClean answer\r\nHUMANIZE_ANSWER_END\r\n'
+result="$(extract_final_answer "$input")"
+
+if [[ "$result" == *"Clean answer"* ]]; then
+    pass "extract_final_answer: CRLF input extracts clean answer"
+else
+    fail "extract_final_answer: CRLF input extracts clean answer" "Clean answer" "$result"
+fi
+
+# ========================================
+# Test 39: extract_final_answer with duplicate sentinel pairs (takes last)
+# ========================================
+echo ""
+echo "--- Test 39: extract_final_answer with duplicate sentinel pairs (takes last) ---"
+echo ""
+
+input="HUMANIZE_ANSWER_BEGIN
+First fake answer
+HUMANIZE_ANSWER_END
+More thinking
+HUMANIZE_ANSWER_BEGIN
+Real final answer
+HUMANIZE_ANSWER_END"
+result="$(extract_final_answer "$input")"
+
+if [[ "$result" == *"Real final answer"* ]] && [[ "$result" != *"First fake"* ]]; then
+    pass "extract_final_answer: duplicate sentinels takes last pair"
+else
+    fail "extract_final_answer: duplicate sentinels takes last pair" "Real final answer only" "$result"
+fi
+
+# ========================================
+# Test 40: extract_final_answer with only BEGIN (fallback)
+# ========================================
+echo ""
+echo "--- Test 40: extract_final_answer with only BEGIN (fallback) ---"
+echo ""
+
+input="HUMANIZE_ANSWER_BEGIN
+Some content but no end marker"
+result="$(extract_final_answer "$input" 2>/dev/null)"
+
+if [[ "$result" == "$input" ]]; then
+    pass "extract_final_answer: only BEGIN marker falls back to raw input"
+else
+    fail "extract_final_answer: only BEGIN marker falls back to raw input" "$input" "$result"
+fi
+
+# ==========================================
+# Task 13: downstream parser compatibility
+# ==========================================
+
+# ========================================
+# Test 41: Normalized output with COMPLETE marker is detected correctly
+# ========================================
+echo ""
+echo "--- Test 41: Normalized output with COMPLETE marker ---"
+echo ""
+
+input="Thinking step 1
+Tool call result
+HUMANIZE_ANSWER_BEGIN
+Review looks good. All acceptance criteria met.
+
+COMPLETE
+HUMANIZE_ANSWER_END
+More agent noise"
+result="$(extract_final_answer "$input")"
+last_line="$(echo "$result" | grep -v '^[[:space:]]*$' | tail -1)"
+
+if [[ "$last_line" == "COMPLETE" ]]; then
+    pass "extract_final_answer: COMPLETE marker detected in normalized output"
+else
+    fail "extract_final_answer: COMPLETE marker detected in normalized output" "COMPLETE" "$last_line"
+fi
+
+# ========================================
+# Test 42: Normalized output with [P0-9] markers is detected correctly
+# ========================================
+echo ""
+echo "--- Test 42: Normalized output with [P0-9] markers ---"
+echo ""
+
+input="Agent thinking about review
+HUMANIZE_ANSWER_BEGIN
+- [P1] Missing null check - hooks/lib/loop-common.sh
+  The function does not validate input
+
+- [P2] Style issue - scripts/ask-codex.sh
+  Inconsistent indentation
+HUMANIZE_ANSWER_END
+Agent cleanup"
+result="$(extract_final_answer "$input")"
+
+if echo "$result" | head -1 | grep -q '\[P1\]'; then
+    pass "extract_final_answer: [P1] marker found in first line of normalized output"
+else
+    fail "extract_final_answer: [P1] marker found in first line of normalized output" "[P1] in first line" "$(echo "$result" | head -1)"
+fi
+
+# ========================================
+# Test 43: Normalized output with LESSON_IDS is extracted correctly
+# ========================================
+echo ""
+echo "--- Test 43: Normalized output with LESSON_IDS ---"
+echo ""
+
+input="Selecting lessons...
+Running analysis...
+HUMANIZE_ANSWER_BEGIN
+LESSON_IDS: BL-20260427-frozen-state-backend
+RATIONALE: Relevant to review CLI backend selection
+HUMANIZE_ANSWER_END"
+result="$(extract_final_answer "$input")"
+lesson_ids="$(echo "$result" | sed -n 's/^LESSON_IDS:[[:space:]]*//p')"
+
+if [[ "$lesson_ids" == "BL-20260427-frozen-state-backend" ]]; then
+    pass "extract_final_answer: LESSON_IDS extracted correctly from normalized output"
+else
+    fail "extract_final_answer: LESSON_IDS extracted correctly from normalized output" "BL-20260427-frozen-state-backend" "$lesson_ids"
+fi
+
 # ========================================
 # Summary
 # ========================================

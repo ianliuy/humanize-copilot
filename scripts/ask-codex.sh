@@ -288,6 +288,13 @@ CODEX_EXIT_CODE=0
 run_prompt_exec "$QUESTION" "$CODEX_MODEL" "$CODEX_EFFORT" "$PROJECT_ROOT" "$CODEX_TIMEOUT" "$REVIEW_CLI" \
     > "$CODEX_STDOUT_FILE" 2> "$CODEX_STDERR_FILE" || CODEX_EXIT_CODE=$?
 
+# Save raw output for debugging, then normalize for copilot backend
+if [[ "$REVIEW_CLI" == "copilot" && -s "$CODEX_STDOUT_FILE" ]]; then
+    cp "$CODEX_STDOUT_FILE" "${CODEX_STDOUT_FILE}.raw"
+    _normalized="$(extract_final_answer < "$CODEX_STDOUT_FILE")"
+    printf '%s' "$_normalized" > "$CODEX_STDOUT_FILE"
+fi
+
 END_TIME=$(date +%s)
 DURATION=$((END_TIME - START_TIME))
 

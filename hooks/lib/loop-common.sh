@@ -265,7 +265,7 @@ detect_review_cli() {
 # Run a prompt through the selected review CLI
 # Arguments: prompt, model, effort, project_root, timeout, cli_backend
 # The cli_backend argument should be "copilot" or "codex"
-# For copilot: uses copilot -p with --model, -s, --allow-all
+# For copilot: uses copilot -p with --model, --allow-all (agent mode)
 # For codex: uses printf | codex exec with -m, -c effort, --full-auto, -C
 # The HUMANIZE_CODEX_BYPASS_SANDBOX env var is respected for codex (--dangerously-bypass-approvals-and-sandbox)
 run_prompt_exec() {
@@ -383,8 +383,14 @@ ${truncation_marker}"
 
             # Substitute diff into template
             local prompt="${template//\{\{DIFF_CONTENT\}\}/$diff_content}"
-            (cd "$project_root" && run_with_timeout "$timeout" copilot -p "$prompt" --model "$model" --allow-all)
+            local _raw_output
+            _raw_output="$(cd "$project_root" && run_with_timeout "$timeout" copilot -p "$prompt" --model "$model" --allow-all)"
             local rc=$?
+            if [[ $rc -eq 0 ]]; then
+                extract_final_answer "$_raw_output"
+            else
+                printf '%s' "$_raw_output"
+            fi
             if [[ "$_review_is_partial" == "true" && $rc -eq 0 ]]; then
                 echo "Note: This review only covered the first ${max_diff_bytes} bytes of a ${original_size}-byte diff." >&2
             fi
@@ -406,6 +412,51 @@ ${truncation_marker}"
             return 1
             ;;
     esac
+}
+
+# Extract the final answer from CLI output that may contain thinking/tool-use noise.
+# Looks for HUMANIZE_ANSWER_BEGIN and HUMANIZE_ANSWER_END sentinel markers on their own lines.
+# If multiple pairs exist, takes the LAST pair (handles accidental sentinel mentions in thinking).
+# Falls back to raw input with a warning if sentinels are not found.
+# Arguments: raw_output (via stdin or $1)
+# Returns: extracted content on stdout, exit 0 always (fallback on failure)
+extract_final_answer() {
+    local raw_input
+    if [[ $# -gt 0 ]]; then
+        raw_input="$1"
+    else
+        raw_input="$(cat)"
+    fi
+
+    # Normalize CRLF to LF
+    raw_input="$(printf '%s' "$raw_input" | tr -d '\r')"
+
+    if [[ -z "$raw_input" ]]; then
+        echo "Warning: Empty input to extract_final_answer. Returning empty." >&2
+        printf '%s' "$raw_input"
+        return 0
+    fi
+
+    # Find the LAST pair of sentinel markers
+    local begin_marker="HUMANIZE_ANSWER_BEGIN"
+    local end_marker="HUMANIZE_ANSWER_END"
+
+    # Use awk to find the last BEGIN..END block
+    local extracted
+    extracted="$(printf '%s\n' "$raw_input" | awk -v bm="$begin_marker" -v em="$end_marker" '
+        $0 == bm { found_begin = NR; content = ""; next }
+        $0 == em && found_begin > 0 { found_end = NR; last_content = content; found_begin = 0; next }
+        found_begin > 0 { content = (content == "" ? $0 : content "\n" $0) }
+        END { if (last_content != "") print last_content }
+    ')"
+
+    if [[ -z "$extracted" ]]; then
+        echo "Warning: Sentinel markers not found in output. Using raw output as fallback." >&2
+        printf '%s' "$raw_input"
+        return 0
+    fi
+
+    printf '%s' "$extracted"
 }
 
 source "$LOOP_COMMON_DIR/template-loader.sh"

@@ -1302,6 +1302,14 @@ List bots that should be removed from active tracking (those with APPROVE status
 - If any bot response indicates usage/rate limits hit (e.g., "usage limits", "rate limit", "quota exceeded"): End with "USAGE_LIMIT_HIT" on its own line
 
 $GOAL_TRACKER_UPDATE_INSTRUCTIONS
+
+## Output Sentinel Requirement
+
+Wrap your ENTIRE response between these sentinel markers:
+
+HUMANIZE_ANSWER_BEGIN
+<your complete response here, including the final recommendation line>
+HUMANIZE_ANSWER_END
 EOF
 
 # Use frozen review CLI from state, defaulting to codex for backward compatibility
@@ -1345,6 +1353,13 @@ CODEX_EXIT_CODE=0
 
 run_prompt_exec "$CODEX_PROMPT_CONTENT" "$PR_CODEX_MODEL" "$PR_CODEX_EFFORT" "$PROJECT_ROOT" "$PR_CODEX_TIMEOUT" "$REVIEW_CLI" \
     > "$CHECK_FILE" 2>/dev/null || CODEX_EXIT_CODE=$?
+
+# Save raw output for debugging, then normalize for copilot backend
+if [[ "$REVIEW_CLI" == "copilot" && -s "$CHECK_FILE" ]]; then
+    cp "$CHECK_FILE" "${CHECK_FILE}.raw"
+    extract_final_answer < "$CHECK_FILE" > "${CHECK_FILE}.tmp"
+    mv "${CHECK_FILE}.tmp" "$CHECK_FILE"
+fi
 
 if [[ $CODEX_EXIT_CODE -ne 0 ]]; then
     REASON="# Codex Review Failed

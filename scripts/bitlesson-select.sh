@@ -155,6 +155,15 @@ Return exactly two lines (no code blocks, no extra whitespace, no additional sec
 
 LESSON_IDS: <comma-separated lesson IDs or NONE>
 RATIONALE: <one concise sentence>
+
+## Output Sentinel Requirement
+
+Wrap your ENTIRE response (both LESSON_IDS and RATIONALE lines) between these sentinel markers:
+
+HUMANIZE_ANSWER_BEGIN
+LESSON_IDS: <your selection>
+RATIONALE: <your reasoning>
+HUMANIZE_ANSWER_END
 EOF
 )"
 
@@ -172,6 +181,11 @@ if [[ "$BITLESSON_PROVIDER" == "codex" ]]; then
     }
 
     RAW_OUTPUT="$(run_prompt_exec "$PROMPT" "$BITLESSON_MODEL" "high" "$CODEX_PROJECT_ROOT" "$SELECTOR_TIMEOUT" "$review_cli")" || CODEX_EXIT_CODE=$?
+
+    # Normalize copilot output if needed
+    if [[ "$review_cli" == "copilot" && -n "$RAW_OUTPUT" ]]; then
+        RAW_OUTPUT="$(extract_final_answer "$RAW_OUTPUT")"
+    fi
 elif [[ "$BITLESSON_PROVIDER" == "claude" ]]; then
     RAW_OUTPUT="$(printf '%s' "$PROMPT" | run_with_timeout "$SELECTOR_TIMEOUT" claude --print --model "$BITLESSON_MODEL" -)" || CODEX_EXIT_CODE=$?
 fi

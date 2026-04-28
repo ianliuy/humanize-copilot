@@ -31,6 +31,16 @@ Severity scale:
 If NO issues are found, output exactly:
 No issues found. The changes look correct.
 
+## Output Sentinel Requirement
+
+Wrap your ENTIRE review output (all findings or the "No issues found" message) between these sentinel markers:
+
+HUMANIZE_ANSWER_BEGIN
+<your complete review output here>
+HUMANIZE_ANSWER_END
+
+The sentinel markers must appear on their own lines. Do not place them inside code blocks.
+
 ## Code Changes
 
 ```diff

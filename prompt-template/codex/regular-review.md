@@ -55,3 +55,13 @@ ACs: X/Y addressed | Forgotten items: N | Unjustified deferrals: N
   - UNFINISHED items are considered INCOMPLETE - do NOT output COMPLETE if any task is pending
   - The ONLY condition for COMPLETE is: all original plan tasks are done, all ACs are met, no deferrals or pending work allowed
 - The word COMPLETE on the last line will stop Claude.
+
+## Output Sentinel Requirement
+
+After writing your review to the result file, you MUST also emit your complete review output between sentinel markers on stdout. This enables reliable extraction when running through different CLI backends:
+
+HUMANIZE_ANSWER_BEGIN
+<your complete review output here — identical to what you wrote to the result file>
+HUMANIZE_ANSWER_END
+
+The sentinel markers must appear on their own lines, exactly as shown above. Do not embed them inside code blocks.
