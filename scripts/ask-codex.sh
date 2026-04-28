@@ -288,11 +288,13 @@ CODEX_EXIT_CODE=0
 run_prompt_exec "$QUESTION" "$CODEX_MODEL" "$CODEX_EFFORT" "$PROJECT_ROOT" "$CODEX_TIMEOUT" "$REVIEW_CLI" \
     > "$CODEX_STDOUT_FILE" 2> "$CODEX_STDERR_FILE" || CODEX_EXIT_CODE=$?
 
-# Save raw output for debugging, then normalize for copilot backend
+# Save raw output for debugging when using copilot backend
+# Note: ask-codex user prompts do NOT include sentinel instructions,
+# so extract_final_answer is not applied here — the raw output IS the answer.
+# Sentinel extraction is only used by review hooks whose prompts include
+# HUMANIZE_ANSWER_BEGIN/END instructions.
 if [[ "$REVIEW_CLI" == "copilot" && -s "$CODEX_STDOUT_FILE" ]]; then
     cp "$CODEX_STDOUT_FILE" "${CODEX_STDOUT_FILE}.raw"
-    _normalized="$(extract_final_answer < "$CODEX_STDOUT_FILE")"
-    printf '%s' "$_normalized" > "$CODEX_STDOUT_FILE"
 fi
 
 END_TIME=$(date +%s)

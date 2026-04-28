@@ -395,11 +395,9 @@ ${truncation_marker}"
             local _raw_output
             _raw_output="$(cd "$project_root" && run_with_timeout "$timeout" copilot -p "$prompt" --model "$model" --allow-all)"
             local rc=$?
-            if [[ $rc -eq 0 ]]; then
-                extract_final_answer "$_raw_output"
-            else
-                printf '%s' "$_raw_output"
-            fi
+            # Output raw content; callers handle extract_final_answer
+            # (consistent with run_prompt_exec which also outputs raw)
+            printf '%s' "$_raw_output"
             if [[ "$_review_is_partial" == "true" && $rc -eq 0 ]]; then
                 echo "Note: This review only covered the first ${max_diff_bytes} bytes of a ${original_size}-byte diff." >&2
             fi
