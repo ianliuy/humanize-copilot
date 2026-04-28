@@ -113,7 +113,7 @@ echo "Review CLI Integration Tests"
 echo "=========================================="
 echo ""
 
-# Source loop-common — functions we need (parse_state_file,
+# Source loop-common -- functions we need (parse_state_file,
 # run_prompt_exec, run_with_timeout, detect_review_cli) become available.
 source_loop_common
 
@@ -254,7 +254,7 @@ echo "Test 6: detect_review_cli respects HUMANIZE_PREFERRED_CLI"
 # 6a: explicit copilot
 detected=$(HUMANIZE_PREFERRED_CLI="copilot" detect_review_cli 2>/dev/null)
 if [[ "$detected" == "copilot" ]]; then
-    pass "detect_review_cli: HUMANIZE_PREFERRED_CLI=copilot → copilot"
+    pass "detect_review_cli: HUMANIZE_PREFERRED_CLI=copilot -> copilot"
 else
     fail "detect_review_cli with HUMANIZE_PREFERRED_CLI=copilot" "copilot" "$detected"
 fi
@@ -262,7 +262,7 @@ fi
 # 6b: explicit codex
 detected=$(HUMANIZE_PREFERRED_CLI="codex" detect_review_cli 2>/dev/null)
 if [[ "$detected" == "codex" ]]; then
-    pass "detect_review_cli: HUMANIZE_PREFERRED_CLI=codex → codex"
+    pass "detect_review_cli: HUMANIZE_PREFERRED_CLI=codex -> codex"
 else
     fail "detect_review_cli with HUMANIZE_PREFERRED_CLI=codex" "codex" "$detected"
 fi

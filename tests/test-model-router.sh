@@ -576,7 +576,7 @@ MOCK_BIN="$TEST_DIR/mock-bin"
 mkdir -p "$MOCK_BIN"
 cat > "$MOCK_BIN/copilot" << 'MOCK_EOF'
 #!/bin/bash
-# No-op mock copilot — we only care about stderr from run_diff_review
+# No-op mock copilot -- we only care about stderr from run_diff_review
 echo "mock review output"
 exit 0
 MOCK_EOF
@@ -733,10 +733,10 @@ else
 fi
 
 # ========================================
-# Test 31: HUMANIZE_PREFERRED_CLI=copilot but copilot missing → hard fail
+# Test 31: HUMANIZE_PREFERRED_CLI=copilot but copilot missing -> hard fail
 # ========================================
 echo ""
-echo "--- Test 31: preferred_cli=copilot with copilot missing → hard fail ---"
+echo "--- Test 31: preferred_cli=copilot with copilot missing -> hard fail ---"
 echo ""
 
 setup_test_dir
@@ -749,16 +749,16 @@ stderr_out=""
 stderr_out=$(PATH="$BIN_DIR:$SAFE_BASE_PATH" HUMANIZE_PREFERRED_CLI=copilot detect_review_cli 2>&1 >/dev/null) || exit_code=$?
 
 if [[ $exit_code -ne 0 ]] && echo "$stderr_out" | grep -qi "copilot"; then
-    pass "detect_review_cli: preferred copilot + missing copilot → hard fail (exit $exit_code)"
+    pass "detect_review_cli: preferred copilot + missing copilot -> hard fail (exit $exit_code)"
 else
-    fail "detect_review_cli: preferred copilot + missing copilot → hard fail" "non-zero exit + copilot error" "exit=$exit_code, stderr=$stderr_out"
+    fail "detect_review_cli: preferred copilot + missing copilot -> hard fail" "non-zero exit + copilot error" "exit=$exit_code, stderr=$stderr_out"
 fi
 
 # ========================================
-# Test 32: HUMANIZE_PREFERRED_CLI=codex but codex missing → hard fail
+# Test 32: HUMANIZE_PREFERRED_CLI=codex but codex missing -> hard fail
 # ========================================
 echo ""
-echo "--- Test 32: preferred_cli=codex with codex missing → hard fail ---"
+echo "--- Test 32: preferred_cli=codex with codex missing -> hard fail ---"
 echo ""
 
 setup_test_dir
@@ -771,16 +771,16 @@ stderr_out=""
 stderr_out=$(PATH="$BIN_DIR:$SAFE_BASE_PATH" HUMANIZE_PREFERRED_CLI=codex detect_review_cli 2>&1 >/dev/null) || exit_code=$?
 
 if [[ $exit_code -ne 0 ]] && echo "$stderr_out" | grep -qi "codex"; then
-    pass "detect_review_cli: preferred codex + missing codex → hard fail (exit $exit_code)"
+    pass "detect_review_cli: preferred codex + missing codex -> hard fail (exit $exit_code)"
 else
-    fail "detect_review_cli: preferred codex + missing codex → hard fail" "non-zero exit + codex error" "exit=$exit_code, stderr=$stderr_out"
+    fail "detect_review_cli: preferred codex + missing codex -> hard fail" "non-zero exit + codex error" "exit=$exit_code, stderr=$stderr_out"
 fi
 
 # ========================================
-# Test 33: Neither CLI installed → hard fail (regardless of preference)
+# Test 33: Neither CLI installed -> hard fail (regardless of preference)
 # ========================================
 echo ""
-echo "--- Test 33: Neither CLI installed → hard fail ---"
+echo "--- Test 33: Neither CLI installed -> hard fail ---"
 echo ""
 
 exit_code=0
@@ -788,9 +788,9 @@ stderr_out=""
 stderr_out=$(PATH="$SAFE_BASE_PATH" HUMANIZE_PREFERRED_CLI=auto detect_review_cli 2>&1 >/dev/null) || exit_code=$?
 
 if [[ $exit_code -ne 0 ]] && echo "$stderr_out" | grep -qi "neither"; then
-    pass "detect_review_cli: neither installed + auto → hard fail (exit $exit_code)"
+    pass "detect_review_cli: neither installed + auto -> hard fail (exit $exit_code)"
 else
-    fail "detect_review_cli: neither installed + auto → hard fail" "non-zero exit + neither error" "exit=$exit_code, stderr=$stderr_out"
+    fail "detect_review_cli: neither installed + auto -> hard fail" "non-zero exit + neither error" "exit=$exit_code, stderr=$stderr_out"
 fi
 
 # ========================================
@@ -836,9 +836,9 @@ if [[ -f "$CAPTURE_FILE" ]]; then
     # Use the same ceiling constant from loop-common.sh (default 16384)
     : "${COPILOT_PROMPT_CEILING:=16384}"
     if [[ $captured_len -le $COPILOT_PROMPT_CEILING ]]; then
-        pass "run_diff_review: copilot -p argument is bounded ($captured_len bytes ≤ $COPILOT_PROMPT_CEILING)"
+        pass "run_diff_review: copilot -p argument is bounded ($captured_len bytes <= $COPILOT_PROMPT_CEILING)"
     else
-        fail "run_diff_review: copilot -p argument is bounded" "≤ $COPILOT_PROMPT_CEILING bytes" "$captured_len bytes"
+        fail "run_diff_review: copilot -p argument is bounded" "<= $COPILOT_PROMPT_CEILING bytes" "$captured_len bytes"
     fi
 else
     fail "run_diff_review: copilot -p argument is bounded" "capture file exists" "capture file not created (exit=$exit_code)"
