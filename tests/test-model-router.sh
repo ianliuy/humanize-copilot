@@ -243,10 +243,10 @@ else
 fi
 
 # ========================================
-# Test 10: codex dependency succeeds when codex is in PATH
+# Test 11: codex dependency succeeds when codex is in PATH
 # ========================================
 echo ""
-echo "--- Test 10: codex dependency succeeds with mock binary ---"
+echo "--- Test 11: codex dependency succeeds with mock binary ---"
 echo ""
 
 setup_test_dir

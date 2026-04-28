@@ -278,6 +278,7 @@ run_prompt_exec() {
 
     case "$cli" in
         copilot)
+            # Note: effort parameter is not used for copilot (not supported by copilot CLI)
             # Enforce prompt size ceiling for Copilot -p argument (safe for all platforms)
             : "${COPILOT_PROMPT_CEILING:=16384}"
             local prompt_size=${#prompt}
@@ -323,11 +324,15 @@ run_diff_review() {
     # Maximum total prompt size for Copilot -p argument (safe for all platforms including Windows)
     : "${COPILOT_PROMPT_CEILING:=16384}"
 
+    # Warn if extra_args provided for copilot (copilot path doesn't use them)
+    if [[ "$cli" == "copilot" && ${#extra_args[@]} -gt 0 ]]; then
+        echo "Warning: Extra review args ignored for copilot backend: ${extra_args[*]}" >&2
+    fi
+
     case "$cli" in
         copilot)
+            # Note: effort parameter is not used for copilot (not supported by copilot CLI)
             # Include both committed and working-tree changes (staged + unstaged)
-            # to match what codex review --base sees. Use diff against base_ref
-            # without restricting to HEAD so uncommitted work is included.
             local diff_content
             diff_content="$(cd "$project_root" && git diff "$base_ref")" || {
                 echo "Error: Failed to compute git diff against $base_ref" >&2
