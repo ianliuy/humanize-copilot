@@ -139,9 +139,16 @@ PREV_ROUND=$((CURRENT_ROUND - 1))
 PREV_PREV_ROUND=$((CURRENT_ROUND - 2))
 
 # Read template and substitute variables
+# Use split-and-concat for SUMMARY_CONTENT (may contain & and \) per BL-20260428-bash-patsub-replacement
 REVIEW_PROMPT=$(cat "$REVIEW_TEMPLATE")
 REVIEW_PROMPT="${REVIEW_PROMPT//\{\{CURRENT_ROUND\}\}/$CURRENT_ROUND}"
-REVIEW_PROMPT="${REVIEW_PROMPT//\{\{SUMMARY_CONTENT\}\}/$SUMMARY_CONTENT}"
+
+# Safe substitution for untrusted content (summary may contain &, \, $)
+_placeholder="{{SUMMARY_CONTENT}}"
+_before="${REVIEW_PROMPT%%"$_placeholder"*}"
+_after="${REVIEW_PROMPT#*"$_placeholder"}"
+REVIEW_PROMPT="${_before}${SUMMARY_CONTENT}${_after}"
+
 REVIEW_PROMPT="${REVIEW_PROMPT//\{\{PLAN_FILE\}\}/$PLAN_FILE}"
 REVIEW_PROMPT="${REVIEW_PROMPT//\{\{PROMPT_FILE\}\}/$PROMPT_FILE}"
 REVIEW_PROMPT="${REVIEW_PROMPT//\{\{REVIEW_RESULT_FILE\}\}/$REVIEW_RESULT_FILE}"
@@ -152,7 +159,7 @@ REVIEW_PROMPT="${REVIEW_PROMPT//\{\{COMPLETED_ITERATIONS\}\}/$COMPLETED_ITERATIO
 REVIEW_PROMPT="${REVIEW_PROMPT//\{\{PREV_ROUND\}\}/$PREV_ROUND}"
 REVIEW_PROMPT="${REVIEW_PROMPT//\{\{PREV_PREV_ROUND\}\}/$PREV_PREV_ROUND}"
 
-# Goal tracker update section
+# Goal tracker update section (safe — controlled content, no untrusted data)
 GOAL_TRACKER_UPDATE_SECTION="Goal Tracker Update
 
 Update @$GOAL_TRACKER_FILE:
