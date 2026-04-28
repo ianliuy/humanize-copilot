@@ -1324,22 +1324,6 @@ Or use \`/humanize:cancel-pr-loop\` to cancel the loop."
 fi
 echo "Review CLI: $REVIEW_CLI (frozen from state)" >&2
 
-# Run Codex
-CODEX_ARGS=("-m" "$PR_CODEX_MODEL")
-if [[ -n "$PR_CODEX_EFFORT" ]]; then
-    CODEX_ARGS+=("-c" "model_reasoning_effort=${PR_CODEX_EFFORT}")
-fi
-
-# Determine automation flag based on environment variable
-# Default: Use --full-auto (safe mode with sandbox)
-# If HUMANIZE_CODEX_BYPASS_SANDBOX is "true" or "1": Use --dangerously-bypass-approvals-and-sandbox
-CODEX_AUTO_FLAG="--full-auto"
-if [[ "${HUMANIZE_CODEX_BYPASS_SANDBOX:-}" == "true" ]] || [[ "${HUMANIZE_CODEX_BYPASS_SANDBOX:-}" == "1" ]]; then
-    CODEX_AUTO_FLAG="--dangerously-bypass-approvals-and-sandbox"
-fi
-
-CODEX_ARGS+=("$CODEX_AUTO_FLAG" "-C" "$PROJECT_ROOT")
-
 CODEX_PROMPT_CONTENT=$(cat "$CODEX_PROMPT_FILE")
 CODEX_EXIT_CODE=0
 

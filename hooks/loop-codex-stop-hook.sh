@@ -983,22 +983,12 @@ mkdir -p "$CACHE_DIR"
 
 # portable-timeout.sh already sourced above
 
-# Build command arguments for summary review (codex exec)
-CODEX_EXEC_ARGS=("-m" "$CODEX_EXEC_MODEL")
-if [[ -n "$CODEX_EXEC_EFFORT" ]]; then
-    CODEX_EXEC_ARGS+=("-c" "model_reasoning_effort=${CODEX_EXEC_EFFORT}")
-fi
-
-CODEX_AUTO_FLAG="--full-auto"
-if [[ "${HUMANIZE_CODEX_BYPASS_SANDBOX:-}" == "true" ]] || [[ "${HUMANIZE_CODEX_BYPASS_SANDBOX:-}" == "1" ]]; then
-    CODEX_AUTO_FLAG="--dangerously-bypass-approvals-and-sandbox"
-fi
-CODEX_EXEC_ARGS+=("$CODEX_AUTO_FLAG" "-C" "$PROJECT_ROOT")
-
-# Build Codex command arguments for codex review
-CODEX_REVIEW_ARGS=("-c" "model=${CODEX_REVIEW_MODEL}" "-c" "review_model=${CODEX_REVIEW_MODEL}")
-if [[ -n "$CODEX_REVIEW_EFFORT" ]]; then
-    CODEX_REVIEW_ARGS+=("-c" "model_reasoning_effort=${CODEX_REVIEW_EFFORT}")
+# Build debug description based on actual review CLI
+REVIEW_CMD_DESC="$REVIEW_CLI"
+if [[ "$REVIEW_CLI" == "copilot" ]]; then
+    REVIEW_CMD_DESC="copilot -p \"<prompt>\" --model $CODEX_EXEC_MODEL"
+else
+    REVIEW_CMD_DESC="codex exec -m $CODEX_EXEC_MODEL \"<prompt>\""
 fi
 
 # ========================================
@@ -1059,7 +1049,11 @@ Provider: codex
         echo "# Review base ($review_base_type): $review_base"
         echo "# Timeout: $CODEX_TIMEOUT seconds"
         echo ""
-        echo "codex review --base $review_base ${CODEX_REVIEW_ARGS[*]}"
+        if [[ "$REVIEW_CLI" == "copilot" ]]; then
+            echo "copilot -p \"<diff-review-prompt>\" --model $CODEX_REVIEW_MODEL (base: $review_base)"
+        else
+            echo "codex review --base $review_base -c model=$CODEX_REVIEW_MODEL"
+        fi
     } > "$CODEX_REVIEW_CMD_FILE"
 
     echo "Code review command saved to: $CODEX_REVIEW_CMD_FILE" >&2
@@ -1390,7 +1384,7 @@ CODEX_PROMPT_CONTENT=$(cat "$REVIEW_PROMPT_FILE")
     echo "# Working directory: $PROJECT_ROOT"
     echo "# Timeout: $CODEX_TIMEOUT seconds"
     echo ""
-    echo "codex exec ${CODEX_EXEC_ARGS[*]} \"<prompt>\""
+    echo "$REVIEW_CMD_DESC"
     echo ""
     echo "# Prompt content:"
     echo "$CODEX_PROMPT_CONTENT"

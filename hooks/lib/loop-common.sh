@@ -278,10 +278,11 @@ run_prompt_exec() {
 
     case "$cli" in
         copilot)
-            # Guard against oversized prompts on platforms with argv limits
             local prompt_size=${#prompt}
-            if [[ $prompt_size -gt 65536 ]]; then
-                echo "Warning: Prompt is $prompt_size bytes, may exceed platform limits." >&2
+            local COPILOT_PROMPT_CEILING=32768
+            if [[ $prompt_size -gt $COPILOT_PROMPT_CEILING ]]; then
+                echo "Warning: Prompt is $prompt_size bytes (limit: $COPILOT_PROMPT_CEILING). Truncating." >&2
+                prompt="${prompt:0:$COPILOT_PROMPT_CEILING}"
             fi
             (cd "$project_root" && run_with_timeout "$timeout" copilot -p "$prompt" --model "$model" --allow-all)
             ;;
