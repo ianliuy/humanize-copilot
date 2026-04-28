@@ -19,6 +19,11 @@ Below is Claude's summary of the work completed:
 ## Part 1: Deliverable Review
 
 - Your task is to conduct a deep critical review, focusing on finding quality issues and identifying gaps between the plan and actual deliverables produced.
+- Report issues using severity markers in the first characters of each line:
+  - `[P0]` Critical: Missing deliverable, completely wrong content, blocks acceptance
+  - `[P1]` High: Deliverable does not address a required acceptance criterion
+  - `[P2]` Medium: Quality issue (incomplete section, inconsistent content, unclear language)
+  - `[P3]` Low: Minor improvement suggestion (formatting, wording)
 - If Claude planned to defer any tasks to future phases in its summary, DO NOT follow its lead. Instead, you should force Claude to complete ALL tasks as planned.
   - Such deferred tasks are considered incomplete work and should be flagged in your review comments, requiring Claude to address them.
   - If Claude planned to defer any tasks, please explore the deliverables in-depth and draft a detailed action plan. This plan should be included in your review comments for Claude to follow.

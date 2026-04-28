@@ -34,6 +34,7 @@ ARTIFACT_LOOP_BASE="$PROJECT_ROOT/.humanize/artifact-loop"
 
 LOOP_DIR=""
 STATE_FILE=""
+IN_FINALIZE="false"
 
 if [[ -d "$ARTIFACT_LOOP_BASE" ]]; then
     for dir in "$ARTIFACT_LOOP_BASE"/*/; do
@@ -41,6 +42,11 @@ if [[ -d "$ARTIFACT_LOOP_BASE" ]]; then
         if [[ -f "$dir/state.md" ]]; then
             LOOP_DIR="${dir%/}"
             STATE_FILE="$LOOP_DIR/state.md"
+            break
+        elif [[ -f "$dir/finalize-state.md" ]]; then
+            LOOP_DIR="${dir%/}"
+            STATE_FILE="$LOOP_DIR/finalize-state.md"
+            IN_FINALIZE="true"
             break
         fi
     done
@@ -227,6 +233,39 @@ LAST_LINE_TRIMMED=$(echo "$REVIEW_CONTENT" | sed '/^[[:space:]]*$/d' | tail -1 |
 # Decision Logic
 # ========================================
 
+# If in finalize phase, check finalize summary and complete
+if [[ "$IN_FINALIZE" == "true" ]]; then
+    FINALIZE_SUMMARY="$LOOP_DIR/finalize-summary.md"
+    if [[ ! -f "$FINALIZE_SUMMARY" || ! -s "$FINALIZE_SUMMARY" ]]; then
+        cat << BLOCK_EOF
+{
+  "decision": "block",
+  "reason": "Finalize summary missing. Write deliverable validation results to $FINALIZE_SUMMARY",
+  "systemMessage": "Write your deliverable validation summary to $FINALIZE_SUMMARY"
+}
+BLOCK_EOF
+        exit 0
+    fi
+    # Finalize complete — end loop
+    echo "Deliverable validation complete. Ending artifact loop." >&2
+    end_loop "$LOOP_DIR" "$STATE_FILE" "$EXIT_COMPLETE"
+    exit 0
+fi
+
+# Check for [P0-9] severity issues in review output (shared regex from loop-common.sh)
+CACHE_DIR="$HOME/.cache/humanize/artifact-loop-$LOOP_TIMESTAMP"
+if [[ -f "$REVIEW_RESULT_FILE" ]]; then
+    REVIEW_ISSUES=""
+    DETECT_EXIT=0
+    # Use detect_review_issues pattern: scan last 50 lines for [P0-9] in first 10 chars
+    REVIEW_ISSUES=$(tail -50 "$REVIEW_RESULT_FILE" 2>/dev/null | awk 'substr($0, 1, 10) ~ /\[P[0-9]\]/ { found=1 } found { print }') || true
+    if [[ -n "$REVIEW_ISSUES" ]]; then
+        echo "Codex review found [P0-9] issues. Continuing artifact loop..." >&2
+        # Fall through to "continue" handling below (same as no terminal marker)
+        LAST_LINE_TRIMMED=""
+    fi
+fi
+
 # STOP marker — circuit breaker
 if [[ "$LAST_LINE_TRIMMED" == "$MARKER_STOP" ]]; then
     echo "========================================" >&2
@@ -246,27 +285,27 @@ if [[ "$LAST_LINE_TRIMMED" == "$MARKER_COMPLETE" ]]; then
 
     # Load finalize prompt
     FINALIZE_TEMPLATE="$CLAUDE_PLUGIN_ROOT/prompt-template/artifact-loop/finalize-deliverable-prompt.md"
+    FINALIZE_SUMMARY_FILE="$LOOP_DIR/finalize-summary.md"
+    FINALIZE_PROMPT=""
     if [[ -f "$FINALIZE_TEMPLATE" ]]; then
         FINALIZE_PROMPT=$(cat "$FINALIZE_TEMPLATE")
-        FINALIZE_SUMMARY_FILE="$LOOP_DIR/finalize-summary.md"
         FINALIZE_PROMPT="${FINALIZE_PROMPT//\{\{PLAN_FILE\}\}/$PLAN_FILE}"
         FINALIZE_PROMPT="${FINALIZE_PROMPT//\{\{GOAL_TRACKER_FILE\}\}/$GOAL_TRACKER_FILE}"
         FINALIZE_PROMPT="${FINALIZE_PROMPT//\{\{FINALIZE_SUMMARY_FILE\}\}/$FINALIZE_SUMMARY_FILE}"
-
-        # Rename state for finalize phase
-        mv "$STATE_FILE" "$LOOP_DIR/finalize-state.md"
-
-        cat << FINALIZE_EOF
-{
-  "decision": "finalize",
-  "reason": "All deliverables confirmed complete. Entering Deliverable Validation Phase.",
-  "prompt": $(echo "$FINALIZE_PROMPT" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))' 2>/dev/null || echo "\"See finalize template\"")
-}
-FINALIZE_EOF
-    else
-        # No finalize template — just complete
-        end_loop "$LOOP_DIR" "$STATE_FILE" "$EXIT_COMPLETE"
     fi
+
+    # Rename state for finalize phase
+    mv "$STATE_FILE" "$LOOP_DIR/finalize-state.md"
+
+    cat << BLOCK_EOF
+{
+  "decision": "block",
+  "reason": "All deliverables confirmed complete. Entering Deliverable Validation Phase.",
+  "systemMessage": "$FINALIZE_PROMPT"
+}
+BLOCK_EOF
+    exit 0
+fi
     exit 0
 fi
 
@@ -305,13 +344,12 @@ Address ALL issues raised in the Codex review above. Then:
 $FOOTER
 NEXT_EOF
 
-cat << CONTINUE_EOF
+cat << BLOCK_EOF
 {
-  "decision": "continue",
+  "decision": "block",
   "reason": "Codex review found issues. Address them in round $NEXT_ROUND.",
-  "prompt_file": "$NEXT_PROMPT_FILE",
-  "summary_file": "$NEXT_SUMMARY_FILE"
+  "systemMessage": "Read $NEXT_PROMPT_FILE for instructions. Write summary to $NEXT_SUMMARY_FILE. Run artifact-loop-stop-gate.sh when done."
 }
-CONTINUE_EOF
+BLOCK_EOF
 
 exit 0

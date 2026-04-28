@@ -8,6 +8,6 @@ After completing the work, please:
 2. Write your work summary into @{{NEXT_SUMMARY_FILE}}
 3. Run the RLCR stop gate to trigger Codex review:
    ```bash
-   bash "${CLAUDE_PLUGIN_ROOT}/scripts/rlcr-stop-gate.sh"
+   bash "${CLAUDE_PLUGIN_ROOT}/scripts/artifact-loop-stop-gate.sh"
    ```
    Handle exit code: 0 = done, 10 = blocked (read feedback, continue), 20 = error

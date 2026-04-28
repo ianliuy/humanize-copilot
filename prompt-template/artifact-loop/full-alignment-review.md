@@ -52,6 +52,11 @@ Critical blockers: [list if any]
 - Conduct a deep critical review of the deliverables produced
 - Verify Claude's claims match reality (check that declared files exist and contain expected content)
 - Identify any gaps, quality issues, or incomplete work
+- Report issues using severity markers in the first characters of each line:
+  - `[P0]` Critical: Missing deliverable, completely wrong content, blocks acceptance
+  - `[P1]` High: Deliverable does not address a required acceptance criterion
+  - `[P2]` Medium: Quality issue (incomplete section, inconsistent content, unclear language)
+  - `[P3]` Low: Minor improvement suggestion (formatting, wording)
 
 ## Part 3: {{GOAL_TRACKER_UPDATE_SECTION}}
 

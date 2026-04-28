@@ -241,7 +241,6 @@ push_every_round: false
 full_review_round: $FULL_REVIEW_ROUND
 plan_file: $PLAN_FILE
 plan_tracked: false
-start_branch: main
 ask_codex_question: $ASK_CODEX_QUESTION
 session_id:
 agent_teams: $AGENT_TEAMS
@@ -331,6 +330,34 @@ $AC_SECTION
 GTEOF
 
 # ========================================
+# Create Round 0 Prompt
+# ========================================
+
+ROUND_0_SUMMARY="$LOOP_DIR/round-0-summary.md"
+
+cat > "$LOOP_DIR/round-0-prompt.md" << R0EOF
+# Round 0 - Artifact Loop
+
+## Implementation Plan
+
+Read @$PLAN_FILE for the full plan.
+
+## Task Routing
+- \`coding\` tasks: Execute directly
+- \`analyze\` tasks: Execute via /humanize:ask-codex
+- \`produce\` tasks: Produce deliverable files directly
+
+## Goal Tracker
+Initialize @$LOOP_DIR/goal-tracker.md with tasks from the plan.
+
+## After Completing Work
+1. Commit changes
+2. Write summary to $ROUND_0_SUMMARY
+3. Run: bash "\${CLAUDE_PLUGIN_ROOT}/scripts/artifact-loop-stop-gate.sh"
+   Handle exit code: 0 = done, 10 = blocked (continue), 20 = error
+R0EOF
+
+# ========================================
 # Output
 # ========================================
 
@@ -347,7 +374,7 @@ echo "Loop Directory: $LOOP_DIR"
 
 echo "The loop is now active. After each round:"
 echo "1. Commit changes and write summary"
-echo "2. Run: bash \"${CLAUDE_PLUGIN_ROOT}/scripts/rlcr-stop-gate.sh\""
+echo "2. Run: bash \"${CLAUDE_PLUGIN_ROOT}/scripts/artifact-loop-stop-gate.sh\""
 echo "3. If blocked (exit 10), read feedback and continue"
 echo "4. If Codex outputs \"COMPLETE\", enters Deliverable Validation Phase"
 echo "5. When validation passes, loop ends"

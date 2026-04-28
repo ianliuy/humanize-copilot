@@ -35,7 +35,7 @@ For each round:
 4. Write summary to `.humanize/artifact-loop/<timestamp>/round-<N>-summary.md`
 5. Run stop gate:
    ```bash
-   bash "${CLAUDE_PLUGIN_ROOT}/scripts/rlcr-stop-gate.sh"
+   bash "${CLAUDE_PLUGIN_ROOT}/scripts/artifact-loop-stop-gate.sh"
    ```
 6. Handle gate result: 0 = done, 10 = blocked, 20 = error
 
