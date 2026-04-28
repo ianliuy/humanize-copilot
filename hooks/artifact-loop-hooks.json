@@ -1,0 +1,16 @@
+{
+  "description": "Artifact Loop Hooks - Stop hook for /start-artifact-loop (non-code deliverable review)",
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/artifact-loop-stop-hook.sh\"",
+            "timeout": 7200
+          }
+        ]
+      }
+    ]
+  }
+}
