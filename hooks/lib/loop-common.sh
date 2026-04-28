@@ -382,8 +382,11 @@ ${truncation_marker}"
                 _review_is_partial=true
             fi
 
-            # Substitute diff into template
-            local prompt="${template//\{\{DIFF_CONTENT\}\}/$diff_content}"
+            # Substitute diff into template using split-and-concat (safe for & and \ in diff content)
+            local _placeholder="{{DIFF_CONTENT}}"
+            local _before="${template%%"$_placeholder"*}"
+            local _after="${template#*"$_placeholder"}"
+            local prompt="${_before}${diff_content}${_after}"
             (cd "$project_root" && run_with_timeout "$timeout" copilot -p "$prompt" --model "$model" --allow-all)
             local rc=$?
             if [[ "$_review_is_partial" == "true" && $rc -eq 0 ]]; then

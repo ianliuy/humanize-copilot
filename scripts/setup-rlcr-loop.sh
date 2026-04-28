@@ -297,13 +297,15 @@ MISSING_DEPS=()
 REVIEW_CLI="$(detect_review_cli)" || {
     preferred="${HUMANIZE_PREFERRED_CLI:-${DEFAULT_PREFERRED_CLI:-auto}}"
     if [[ "$preferred" == "auto" ]]; then
-        echo "Please install Copilot CLI or Codex CLI:" >&2
-        echo "  Copilot: https://docs.github.com/en/copilot" >&2
-        echo "  Codex:   https://github.com/openai/codex" >&2
+        MISSING_DEPS+=("copilot or codex - Install: https://docs.github.com/en/copilot or https://github.com/openai/codex")
+    else
+        MISSING_DEPS+=("$preferred - Install the configured review CLI")
     fi
-    exit 1
+    REVIEW_CLI=""
 }
-echo "Review CLI: $REVIEW_CLI" >&2
+if [[ -n "$REVIEW_CLI" ]]; then
+    echo "Review CLI: $REVIEW_CLI" >&2
+fi
 
 if ! command -v jq &>/dev/null; then
     MISSING_DEPS+=("jq     - Install: https://jqlang.github.io/jq/download/")
