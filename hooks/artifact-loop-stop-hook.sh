@@ -233,7 +233,7 @@ LAST_LINE_TRIMMED=$(echo "$REVIEW_CONTENT" | sed '/^[[:space:]]*$/d' | tail -1 |
 # Decision Logic
 # ========================================
 
-# If in finalize phase, check finalize summary and complete
+# If in finalize phase, run deliverable validation through Codex
 if [[ "$IN_FINALIZE" == "true" ]]; then
     FINALIZE_SUMMARY="$LOOP_DIR/finalize-summary.md"
     if [[ ! -f "$FINALIZE_SUMMARY" || ! -s "$FINALIZE_SUMMARY" ]]; then
@@ -246,22 +246,90 @@ if [[ "$IN_FINALIZE" == "true" ]]; then
 BLOCK_EOF
         exit 0
     fi
-    # Finalize complete — end loop
-    echo "Deliverable validation complete. Ending artifact loop." >&2
+
+    # Run deliverable validator review through Codex
+    FINALIZE_TEMPLATE="$CLAUDE_PLUGIN_ROOT/prompt-template/artifact-loop/finalize-deliverable-prompt.md"
+    if [[ -f "$FINALIZE_TEMPLATE" ]]; then
+        VALIDATOR_PROMPT=$(cat "$FINALIZE_TEMPLATE")
+        VALIDATOR_PROMPT="${VALIDATOR_PROMPT//\{\{PLAN_FILE\}\}/$PLAN_FILE}"
+        VALIDATOR_PROMPT="${VALIDATOR_PROMPT//\{\{GOAL_TRACKER_FILE\}\}/$GOAL_TRACKER_FILE}"
+        VALIDATOR_PROMPT="${VALIDATOR_PROMPT//\{\{FINALIZE_SUMMARY_FILE\}\}/$FINALIZE_SUMMARY}"
+
+        # Append the finalize summary content using safe substitution
+        FINALIZE_CONTENT=$(cat "$FINALIZE_SUMMARY")
+        VALIDATOR_PROMPT="${VALIDATOR_PROMPT}
+
+--- Finalize Summary ---
+${FINALIZE_CONTENT}
+--- End Finalize Summary ---"
+
+        CACHE_DIR="$HOME/.cache/humanize/artifact-loop-$LOOP_TIMESTAMP"
+        mkdir -p "$CACHE_DIR"
+        VALIDATOR_LOG="$CACHE_DIR/finalize-validator.log"
+        VALIDATOR_RESULT="$LOOP_DIR/finalize-review-result.md"
+
+        echo "Running deliverable validation review..." >&2
+        if command -v codex &>/dev/null; then
+            codex exec --model "$CODEX_MODEL" --effort "$CODEX_EFFORT" "$VALIDATOR_PROMPT" > "$VALIDATOR_LOG" 2>&1 || true
+        elif command -v copilot &>/dev/null; then
+            echo "$VALIDATOR_PROMPT" | copilot -p - > "$VALIDATOR_LOG" 2>&1 || true
+        fi
+
+        if [[ -f "$VALIDATOR_LOG" && -s "$VALIDATOR_LOG" ]]; then
+            VALIDATOR_CONTENT=$(cat "$VALIDATOR_LOG")
+            echo "$VALIDATOR_CONTENT" > "$VALIDATOR_RESULT"
+
+            # Check for [P0-9] issues using shared pattern
+            VALIDATOR_ISSUES=$(tail -50 "$VALIDATOR_LOG" 2>/dev/null | awk 'substr($0, 1, 10) ~ /\[P[0-9]\]/ { found=1 } found { print }') || true
+            if [[ -n "$VALIDATOR_ISSUES" ]]; then
+                echo "Deliverable validator found issues. Continue fixing." >&2
+                cat << BLOCK_EOF
+{
+  "decision": "block",
+  "reason": "Deliverable validator found [P0-9] issues in finalize review.",
+  "systemMessage": "$VALIDATOR_CONTENT"
+}
+BLOCK_EOF
+                exit 0
+            fi
+
+            # Check for COMPLETE marker
+            VALIDATOR_LAST=$(echo "$VALIDATOR_CONTENT" | sed '/^[[:space:]]*$/d' | tail -1 | tr -d '[:space:]')
+            if [[ "$VALIDATOR_LAST" == "$MARKER_COMPLETE" ]]; then
+                echo "Deliverable validation passed. Ending artifact loop." >&2
+                end_loop "$LOOP_DIR" "$STATE_FILE" "$EXIT_COMPLETE"
+                exit 0
+            fi
+        fi
+
+        # Validator didn't produce clear result — block
+        cat << BLOCK_EOF
+{
+  "decision": "block",
+  "reason": "Deliverable validator did not produce a clear COMPLETE. Review and retry.",
+  "systemMessage": "Validator result unclear. Check $VALIDATOR_RESULT and retry."
+}
+BLOCK_EOF
+        exit 0
+    fi
+
+    # No finalize template — just complete
     end_loop "$LOOP_DIR" "$STATE_FILE" "$EXIT_COMPLETE"
     exit 0
 fi
 
-# Check for [P0-9] severity issues in review output (shared regex from loop-common.sh)
-CACHE_DIR="$HOME/.cache/humanize/artifact-loop-$LOOP_TIMESTAMP"
+# Check for [P0-9] severity issues using shared detect_review_issues from loop-common.sh
 if [[ -f "$REVIEW_RESULT_FILE" ]]; then
     REVIEW_ISSUES=""
     DETECT_EXIT=0
-    # Use detect_review_issues pattern: scan last 50 lines for [P0-9] in first 10 chars
-    REVIEW_ISSUES=$(tail -50 "$REVIEW_RESULT_FILE" 2>/dev/null | awk 'substr($0, 1, 10) ~ /\[P[0-9]\]/ { found=1 } found { print }') || true
-    if [[ -n "$REVIEW_ISSUES" ]]; then
+    # detect_review_issues requires LOOP_DIR and CACHE_DIR globals
+    CACHE_DIR="$HOME/.cache/humanize/artifact-loop-$LOOP_TIMESTAMP"
+    mkdir -p "$CACHE_DIR"
+    # Copy review result to the location detect_review_issues expects
+    cp "$REVIEW_RESULT_FILE" "$CACHE_DIR/round-${CURRENT_ROUND}-codex-review.log" 2>/dev/null || true
+    REVIEW_ISSUES=$(detect_review_issues "$CURRENT_ROUND") || DETECT_EXIT=$?
+    if [[ "$DETECT_EXIT" -eq 0 ]] && [[ -n "$REVIEW_ISSUES" ]]; then
         echo "Codex review found [P0-9] issues. Continuing artifact loop..." >&2
-        # Fall through to "continue" handling below (same as no terminal marker)
         LAST_LINE_TRIMMED=""
     fi
 fi
@@ -304,8 +372,6 @@ if [[ "$LAST_LINE_TRIMMED" == "$MARKER_COMPLETE" ]]; then
   "systemMessage": "$FINALIZE_PROMPT"
 }
 BLOCK_EOF
-    exit 0
-fi
     exit 0
 fi
 

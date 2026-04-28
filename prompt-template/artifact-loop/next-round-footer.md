@@ -6,7 +6,7 @@ Note: You MUST NOT try to exit by lying, editing loop state files, or executing 
 After completing the work, please:
 1. Commit your changes with a descriptive commit message
 2. Write your work summary into @{{NEXT_SUMMARY_FILE}}
-3. Run the RLCR stop gate to trigger Codex review:
+3. Run the artifact loop stop gate to trigger Codex review:
    ```bash
    bash "${CLAUDE_PLUGIN_ROOT}/scripts/artifact-loop-stop-gate.sh"
    ```

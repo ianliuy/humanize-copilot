@@ -72,6 +72,11 @@
             "type": "command",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/pr-loop-stop-hook.sh\"",
             "timeout": 7200
+          },
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/artifact-loop-stop-hook.sh\"",
+            "timeout": 7200
           }
         ]
       }

@@ -53,4 +53,4 @@ For each round:
 
 ## Cancel
 
-Cancel by removing the active state.md or running `/humanize:cancel-rlcr-loop`.
+Cancel by removing the active `state.md` from `.humanize/artifact-loop/<timestamp>/`.
