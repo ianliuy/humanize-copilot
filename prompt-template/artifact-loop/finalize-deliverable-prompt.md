@@ -46,3 +46,13 @@ Your summary should include:
 - Any issues found and fixed during validation
 - Confirmation that all acceptance criteria are met
 - Any notes about quality decisions
+
+## Output Requirements
+
+- If issues are found during validation, report them using the severity markers above (`[P0]` through `[P3]`). Do NOT output "COMPLETE" when issues are present.
+- **CRITICAL**: Only output "COMPLETE" as the last line if ALL deliverables pass validation with no P0 or P1 issues remaining.
+  - All deliverable files exist and are complete
+  - All acceptance criteria are met with evidence
+  - No P0 or P1 issues remain unresolved
+  - P2/P3 issues may be noted but do not block COMPLETE
+- The word COMPLETE on the last line will end the artifact loop.

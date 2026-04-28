@@ -77,8 +77,94 @@ FULL_REVIEW_ROUND="${STATE_FULL_REVIEW_ROUND:-5}"
 # Derive loop timestamp from directory name
 LOOP_TIMESTAMP="$(basename "$LOOP_DIR")"
 
+CLAUDE_PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+CACHE_DIR="$HOME/.cache/humanize/artifact-loop-$LOOP_TIMESTAMP"
+mkdir -p "$CACHE_DIR"
+
 # ========================================
-# Check Summary File
+# Finalize Phase Handler (MUST run before normal review)
+# Per AC-1: finalize rounds never run summary check,
+# max-iterations, or normal Codex review.
+# ========================================
+
+if [[ "$IN_FINALIZE" == "true" ]]; then
+    FINALIZE_SUMMARY="$LOOP_DIR/finalize-summary.md"
+    if [[ ! -f "$FINALIZE_SUMMARY" || ! -s "$FINALIZE_SUMMARY" ]]; then
+        jq -n \
+            --arg reason "Finalize summary missing. Write deliverable validation results to $FINALIZE_SUMMARY" \
+            --arg msg "Write your deliverable validation summary to $FINALIZE_SUMMARY" \
+            '{"decision": "block", "reason": $reason, "systemMessage": $msg}'
+        exit 0
+    fi
+
+    # Run deliverable validator review through Codex
+    FINALIZE_TEMPLATE="$CLAUDE_PLUGIN_ROOT/prompt-template/artifact-loop/finalize-deliverable-prompt.md"
+    if [[ -f "$FINALIZE_TEMPLATE" ]]; then
+        VALIDATOR_PROMPT=$(cat "$FINALIZE_TEMPLATE")
+        VALIDATOR_PROMPT="${VALIDATOR_PROMPT//\{\{PLAN_FILE\}\}/$PLAN_FILE}"
+        VALIDATOR_PROMPT="${VALIDATOR_PROMPT//\{\{GOAL_TRACKER_FILE\}\}/$GOAL_DIR/goal-tracker.md}"
+        VALIDATOR_PROMPT="${VALIDATOR_PROMPT//\{\{FINALIZE_SUMMARY_FILE\}\}/$FINALIZE_SUMMARY}"
+
+        # Append finalize summary using safe substitution
+        FINALIZE_CONTENT=$(cat "$FINALIZE_SUMMARY")
+        VALIDATOR_PROMPT="${VALIDATOR_PROMPT}
+
+--- Finalize Summary ---
+${FINALIZE_CONTENT}
+--- End Finalize Summary ---"
+
+        VALIDATOR_LOG="$CACHE_DIR/finalize-validator.log"
+        VALIDATOR_RESULT="$LOOP_DIR/finalize-review-result.md"
+
+        echo "Running deliverable validation review..." >&2
+        REVIEW_CLI="${STATE_REVIEW_CLI:-codex}"
+        if ! run_prompt_exec "$VALIDATOR_PROMPT" "$VALIDATOR_LOG" \
+            "$CODEX_MODEL" "$CODEX_EFFORT" "$CODEX_TIMEOUT" "$REVIEW_CLI"; then
+            echo "Warning: Deliverable validator CLI returned non-zero" >&2
+        fi
+
+        if [[ -f "$VALIDATOR_LOG" && -s "$VALIDATOR_LOG" ]]; then
+            VALIDATOR_CONTENT=$(cat "$VALIDATOR_LOG")
+            echo "$VALIDATOR_CONTENT" > "$VALIDATOR_RESULT"
+
+            # Check for [P0-9] issues using shared detect_review_issues
+            REVIEW_ISSUES=""
+            DETECT_EXIT=0
+            cp "$VALIDATOR_LOG" "$CACHE_DIR/round-${CURRENT_ROUND}-codex-review.log" 2>/dev/null || true
+            REVIEW_ISSUES=$(detect_review_issues "$CURRENT_ROUND") || DETECT_EXIT=$?
+            if [[ "$DETECT_EXIT" -eq 0 ]] && [[ -n "$REVIEW_ISSUES" ]]; then
+                echo "Deliverable validator found issues. Continue fixing." >&2
+                jq -n \
+                    --arg reason "Deliverable validator found [P0-9] issues in finalize review." \
+                    --arg msg "$VALIDATOR_CONTENT" \
+                    '{"decision": "block", "reason": $reason, "systemMessage": $msg}'
+                exit 0
+            fi
+
+            # Check for COMPLETE marker
+            VALIDATOR_LAST=$(echo "$VALIDATOR_CONTENT" | sed '/^[[:space:]]*$/d' | tail -1 | tr -d '[:space:]')
+            if [[ "$VALIDATOR_LAST" == "$MARKER_COMPLETE" ]]; then
+                echo "Deliverable validation passed. Ending artifact loop." >&2
+                end_loop "$LOOP_DIR" "$STATE_FILE" "$EXIT_COMPLETE"
+                exit 0
+            fi
+        fi
+
+        # Validator didn't produce clear result
+        jq -n \
+            --arg reason "Deliverable validator did not produce a clear COMPLETE. Review and retry." \
+            --arg msg "Validator result unclear. Check $VALIDATOR_RESULT and retry." \
+            '{"decision": "block", "reason": $reason, "systemMessage": $msg}'
+        exit 0
+    fi
+
+    # No finalize template — just complete
+    end_loop "$LOOP_DIR" "$STATE_FILE" "$EXIT_COMPLETE"
+    exit 0
+fi
+
+# ========================================
+# Check Summary File (non-finalize only)
 # ========================================
 
 SUMMARY_FILE="$LOOP_DIR/round-${CURRENT_ROUND}-summary.md"
@@ -90,13 +176,10 @@ if [[ ! -f "$SUMMARY_FILE" || ! -s "$SUMMARY_FILE" ]]; then
     echo "========================================" >&2
 
     # Return block instruction
-    cat << BLOCK_EOF
-{
-  "decision": "block",
-  "reason": "Summary file missing or empty. Write your summary to $SUMMARY_FILE before trying to exit.",
-  "next_step": "Write summary, then try again"
-}
-BLOCK_EOF
+    jq -n \
+        --arg reason "Summary file missing or empty. Write your summary to $SUMMARY_FILE before trying to exit." \
+        --arg step "Write summary, then try again" \
+        '{"decision": "block", "reason": $reason, "next_step": $step}'
     exit 0
 fi
 
@@ -125,7 +208,6 @@ if [[ $FULL_REVIEW_ROUND -gt 0 ]] && [[ $(( (CURRENT_ROUND + 1) % FULL_REVIEW_RO
 fi
 
 # Select review template
-CLAUDE_PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 if [[ "$FULL_ALIGNMENT_CHECK" == "true" ]]; then
     REVIEW_TEMPLATE="$CLAUDE_PLUGIN_ROOT/prompt-template/artifact-loop/full-alignment-review.md"
 else
@@ -185,24 +267,12 @@ echo "$REVIEW_PROMPT" > "$REVIEW_PROMPT_FILE"
 
 echo "Running Codex summary review for artifact loop (round $CURRENT_ROUND)..." >&2
 
-CACHE_DIR="$HOME/.cache/humanize/artifact-loop-$LOOP_TIMESTAMP"
-mkdir -p "$CACHE_DIR"
-
+# Run review through shared CLI helper
 CODEX_LOG="$CACHE_DIR/round-${CURRENT_ROUND}-codex-review.log"
-
-# Run codex exec with the review prompt
-if command -v codex &>/dev/null; then
-    codex exec \
-        --model "$CODEX_MODEL" \
-        --effort "$CODEX_EFFORT" \
-        "$REVIEW_PROMPT" \
-        > "$CODEX_LOG" 2>&1 || true
-elif command -v copilot &>/dev/null; then
-    echo "$REVIEW_PROMPT" | copilot -p - \
-        > "$CODEX_LOG" 2>&1 || true
-else
-    echo "Error: Neither codex nor copilot CLI found" >&2
-    exit 1
+REVIEW_CLI="${STATE_REVIEW_CLI:-codex}"
+if ! run_prompt_exec "$REVIEW_PROMPT" "$CODEX_LOG" \
+    "$CODEX_MODEL" "$CODEX_EFFORT" "$CODEX_TIMEOUT" "$REVIEW_CLI"; then
+    echo "Warning: Review CLI returned non-zero exit" >&2
 fi
 
 # ========================================
@@ -211,13 +281,10 @@ fi
 
 if [[ ! -f "$CODEX_LOG" || ! -s "$CODEX_LOG" ]]; then
     echo "Error: Codex review produced no output" >&2
-    cat << BLOCK_EOF
-{
-  "decision": "block",
-  "reason": "Codex review produced no output. Retry.",
-  "next_step": "Try running the stop gate again"
-}
-BLOCK_EOF
+    jq -n \
+        --arg reason "Codex review produced no output. Retry." \
+        --arg step "Try running the stop gate again" \
+        '{"decision": "block", "reason": $reason, "next_step": $step}'
     exit 0
 fi
 
@@ -233,98 +300,10 @@ LAST_LINE_TRIMMED=$(echo "$REVIEW_CONTENT" | sed '/^[[:space:]]*$/d' | tail -1 |
 # Decision Logic
 # ========================================
 
-# If in finalize phase, run deliverable validation through Codex
-if [[ "$IN_FINALIZE" == "true" ]]; then
-    FINALIZE_SUMMARY="$LOOP_DIR/finalize-summary.md"
-    if [[ ! -f "$FINALIZE_SUMMARY" || ! -s "$FINALIZE_SUMMARY" ]]; then
-        cat << BLOCK_EOF
-{
-  "decision": "block",
-  "reason": "Finalize summary missing. Write deliverable validation results to $FINALIZE_SUMMARY",
-  "systemMessage": "Write your deliverable validation summary to $FINALIZE_SUMMARY"
-}
-BLOCK_EOF
-        exit 0
-    fi
-
-    # Run deliverable validator review through Codex
-    FINALIZE_TEMPLATE="$CLAUDE_PLUGIN_ROOT/prompt-template/artifact-loop/finalize-deliverable-prompt.md"
-    if [[ -f "$FINALIZE_TEMPLATE" ]]; then
-        VALIDATOR_PROMPT=$(cat "$FINALIZE_TEMPLATE")
-        VALIDATOR_PROMPT="${VALIDATOR_PROMPT//\{\{PLAN_FILE\}\}/$PLAN_FILE}"
-        VALIDATOR_PROMPT="${VALIDATOR_PROMPT//\{\{GOAL_TRACKER_FILE\}\}/$GOAL_TRACKER_FILE}"
-        VALIDATOR_PROMPT="${VALIDATOR_PROMPT//\{\{FINALIZE_SUMMARY_FILE\}\}/$FINALIZE_SUMMARY}"
-
-        # Append the finalize summary content using safe substitution
-        FINALIZE_CONTENT=$(cat "$FINALIZE_SUMMARY")
-        VALIDATOR_PROMPT="${VALIDATOR_PROMPT}
-
---- Finalize Summary ---
-${FINALIZE_CONTENT}
---- End Finalize Summary ---"
-
-        CACHE_DIR="$HOME/.cache/humanize/artifact-loop-$LOOP_TIMESTAMP"
-        mkdir -p "$CACHE_DIR"
-        VALIDATOR_LOG="$CACHE_DIR/finalize-validator.log"
-        VALIDATOR_RESULT="$LOOP_DIR/finalize-review-result.md"
-
-        echo "Running deliverable validation review..." >&2
-        if command -v codex &>/dev/null; then
-            codex exec --model "$CODEX_MODEL" --effort "$CODEX_EFFORT" "$VALIDATOR_PROMPT" > "$VALIDATOR_LOG" 2>&1 || true
-        elif command -v copilot &>/dev/null; then
-            echo "$VALIDATOR_PROMPT" | copilot -p - > "$VALIDATOR_LOG" 2>&1 || true
-        fi
-
-        if [[ -f "$VALIDATOR_LOG" && -s "$VALIDATOR_LOG" ]]; then
-            VALIDATOR_CONTENT=$(cat "$VALIDATOR_LOG")
-            echo "$VALIDATOR_CONTENT" > "$VALIDATOR_RESULT"
-
-            # Check for [P0-9] issues using shared pattern
-            VALIDATOR_ISSUES=$(tail -50 "$VALIDATOR_LOG" 2>/dev/null | awk 'substr($0, 1, 10) ~ /\[P[0-9]\]/ { found=1 } found { print }') || true
-            if [[ -n "$VALIDATOR_ISSUES" ]]; then
-                echo "Deliverable validator found issues. Continue fixing." >&2
-                cat << BLOCK_EOF
-{
-  "decision": "block",
-  "reason": "Deliverable validator found [P0-9] issues in finalize review.",
-  "systemMessage": "$VALIDATOR_CONTENT"
-}
-BLOCK_EOF
-                exit 0
-            fi
-
-            # Check for COMPLETE marker
-            VALIDATOR_LAST=$(echo "$VALIDATOR_CONTENT" | sed '/^[[:space:]]*$/d' | tail -1 | tr -d '[:space:]')
-            if [[ "$VALIDATOR_LAST" == "$MARKER_COMPLETE" ]]; then
-                echo "Deliverable validation passed. Ending artifact loop." >&2
-                end_loop "$LOOP_DIR" "$STATE_FILE" "$EXIT_COMPLETE"
-                exit 0
-            fi
-        fi
-
-        # Validator didn't produce clear result — block
-        cat << BLOCK_EOF
-{
-  "decision": "block",
-  "reason": "Deliverable validator did not produce a clear COMPLETE. Review and retry.",
-  "systemMessage": "Validator result unclear. Check $VALIDATOR_RESULT and retry."
-}
-BLOCK_EOF
-        exit 0
-    fi
-
-    # No finalize template — just complete
-    end_loop "$LOOP_DIR" "$STATE_FILE" "$EXIT_COMPLETE"
-    exit 0
-fi
-
 # Check for [P0-9] severity issues using shared detect_review_issues from loop-common.sh
 if [[ -f "$REVIEW_RESULT_FILE" ]]; then
     REVIEW_ISSUES=""
     DETECT_EXIT=0
-    # detect_review_issues requires LOOP_DIR and CACHE_DIR globals
-    CACHE_DIR="$HOME/.cache/humanize/artifact-loop-$LOOP_TIMESTAMP"
-    mkdir -p "$CACHE_DIR"
     # Copy review result to the location detect_review_issues expects
     cp "$REVIEW_RESULT_FILE" "$CACHE_DIR/round-${CURRENT_ROUND}-codex-review.log" 2>/dev/null || true
     REVIEW_ISSUES=$(detect_review_issues "$CURRENT_ROUND") || DETECT_EXIT=$?
@@ -365,13 +344,10 @@ if [[ "$LAST_LINE_TRIMMED" == "$MARKER_COMPLETE" ]]; then
     # Rename state for finalize phase
     mv "$STATE_FILE" "$LOOP_DIR/finalize-state.md"
 
-    cat << BLOCK_EOF
-{
-  "decision": "block",
-  "reason": "All deliverables confirmed complete. Entering Deliverable Validation Phase.",
-  "systemMessage": "$FINALIZE_PROMPT"
-}
-BLOCK_EOF
+    jq -n \
+        --arg reason "All deliverables confirmed complete. Entering Deliverable Validation Phase." \
+        --arg msg "$FINALIZE_PROMPT" \
+        '{"decision": "block", "reason": $reason, "systemMessage": $msg}'
     exit 0
 fi
 
@@ -410,12 +386,9 @@ Address ALL issues raised in the Codex review above. Then:
 $FOOTER
 NEXT_EOF
 
-cat << BLOCK_EOF
-{
-  "decision": "block",
-  "reason": "Codex review found issues. Address them in round $NEXT_ROUND.",
-  "systemMessage": "Read $NEXT_PROMPT_FILE for instructions. Write summary to $NEXT_SUMMARY_FILE. Run artifact-loop-stop-gate.sh when done."
-}
-BLOCK_EOF
+jq -n \
+    --arg reason "Codex review found issues. Address them in round $NEXT_ROUND." \
+    --arg msg "Read $NEXT_PROMPT_FILE for instructions. Write summary to $NEXT_SUMMARY_FILE. Run artifact-loop-stop-gate.sh when done." \
+    '{"decision": "block", "reason": $reason, "systemMessage": $msg}'
 
 exit 0

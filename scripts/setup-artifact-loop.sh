@@ -175,6 +175,12 @@ if [[ -d "$ARTIFACT_LOOP_DIR" ]]; then
             echo "Only one loop can be active at a time." >&2
             echo "Cancel the artifact loop first." >&2
             exit 1
+        elif [[ -f "$dir/finalize-state.md" ]]; then
+            echo "Error: An artifact loop is in finalize phase" >&2
+            echo "  Active loop: $dir" >&2
+            echo "Only one loop can be active at a time." >&2
+            echo "Cancel the artifact loop first or wait for finalize to complete." >&2
+            exit 1
         fi
     done
 fi
