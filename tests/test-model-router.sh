@@ -10,6 +10,7 @@ source "$PROJECT_ROOT/scripts/lib/model-router.sh"
 SAFE_BASE_PATH="/usr/bin:/bin:/usr/sbin:/sbin"
 
 # Source loop-common.sh for detect_review_cli tests
+source "$PROJECT_ROOT/scripts/portable-timeout.sh"
 source "$PROJECT_ROOT/hooks/lib/loop-common.sh"
 
 echo "=========================================="
